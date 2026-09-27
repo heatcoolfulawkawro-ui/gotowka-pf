@@ -253,7 +253,7 @@ function gotowkaPfShowVersion(v){
     <div class="field"><input id="pinGateInput" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN"></div>
     <div class="field-error" id="pinGateError">Błędny PIN — spróbuj ponownie.</div>
     <div class="sheet-actions">
-      <button class="btn-save" style="flex:1" onclick="submitPinGate()">Odblokuj</button>
+      <button class="btn-save" id="pinGateBtn" style="flex:1" onclick="submitPinGate()">Odblokuj</button>
     </div>
     <div style="text-align:center; margin-top:12px;">
       <a href="#" onclick="openPinChangeFromGate(); return false;" style="color:var(--ink-dim); font-size:.78rem;">Zapomniałeś PIN-u? Zresetuj przez e-mail</a>
@@ -303,6 +303,11 @@ async function submitPinGate(){
   if(!pinVal) return;
   const errEl = document.getElementById('pinGateError');
   errEl.classList.remove('show');
+  const btn = document.getElementById('pinGateBtn');
+  if(btn.disabled) return; // już trwa sprawdzanie — ignoruj drugie kliknięcie
+  btn.disabled = true;
+  const origText = btn.textContent;
+  btn.textContent = 'Sprawdzam…';
   try{
     const res = await fetch(GAS_URL + '?key=' + encodeURIComponent(STORAGE_KEY) + '&pin=' + encodeURIComponent(pinVal));
     const text = await res.text();
@@ -316,6 +321,9 @@ async function submitPinGate(){
     // już zapisanych danych.
     setPin(pinVal);
     hidePinGate();
+  }finally{
+    btn.disabled = false;
+    btn.textContent = origText;
   }
 }
 
