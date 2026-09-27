@@ -443,8 +443,11 @@ async function loadRemoteOnStart(){
     const res = await fetch(GAS_URL + '?key=' + encodeURIComponent(STORAGE_KEY) + '&pin=' + encodeURIComponent(getPin()));
     const text = await res.text();
     if(text === AUTH_FAIL_TEXT){ clearPin(); showPinGate(); return; }
+    // Sam dotarliśmy do serwera z dobrym PIN-em — to już sukces, nawet gdy
+    // odpowiedź jest pusta (pierwszy raz, jeszcze bez zapisanych danych).
+    setSyncStatus('ok');
     applyRemoteState(text);
-  }catch(e){ /* offline — zostajemy przy danych lokalnych */ }
+  }catch(e){ setSyncStatus('local'); /* offline — zostajemy przy danych lokalnych */ }
 }
 
 /* ====================== POMOCNICZE / DATY ====================== */
