@@ -370,16 +370,11 @@ async function confirmPinResetCode(){
     const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'confirm_pin_reset', code, newPin }) });
     const data = await res.json();
     if(!data.ok){ errEl.textContent = data.error || 'Błąd'; errEl.classList.add('show'); return; }
-    setPin(newPin);
-    pinChangeFromGate = false;
     closePinChangeSheet();
-    hidePinGate();
-    showToast('PIN zmieniony');
-    try{
-      const r2 = await fetch(GAS_URL + '?key=' + encodeURIComponent(STORAGE_KEY) + '&pin=' + encodeURIComponent(newPin));
-      const t2 = await r2.text();
-      if(t2 !== AUTH_FAIL_TEXT) applyRemoteState(t2);
-    }catch(e2){ /* offline — dane lokalne zostają, dociągnie się później */ }
+    const wasFromGate = pinChangeFromGate;
+    pinChangeFromGate = false;
+    showToast('Sprawdź maila i kliknij link, żeby dokończyć zmianę PIN-u');
+    if(wasFromGate) showPinGate();
   }catch(e){ errEl.textContent='Brak połączenia'; errEl.classList.add('show'); }
 }
 

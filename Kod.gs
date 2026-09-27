@@ -101,6 +101,7 @@ function currentPin() {
 }
 
 function doGet(e) {
+  if (e.parameter.confirmPin) return confirmPinLink(e.parameter.confirmPin);
   if (String(e.parameter.pin) !== currentPin()) {
     return ContentService.createTextOutput(AUTH_FAIL_TEXT).setMimeType(ContentService.MimeType.JSON);
   }
@@ -183,16 +184,50 @@ function requestPinReset() {
   return jsonOut({ ok: true });
 }
 
+// Kod z maila NIE zmienia PIN-u od razu — dopiero wysyła DRUGI mail z linkiem
+// (patrz confirmPinLink), którego kliknięcie faktycznie go zatwierdza. Dwa
+// niezależne kroki (kod wpisany w appce + świeże kliknięcie w skrzynce) zamiast
+// jednego, żeby sama znajomość kodu nie wystarczała do przejęcia PIN-u.
 function confirmPinReset(code, newPin) {
   const props = PropertiesService.getScriptProperties();
   const storedCode = props.getProperty('PIN_RESET_CODE');
   const expires = Number(props.getProperty('PIN_RESET_EXPIRES') || 0);
   if (!storedCode || String(code) !== storedCode) return jsonOut({ ok: false, error: 'Nieprawidłowy kod' });
   if (Date.now() > expires) return jsonOut({ ok: false, error: 'Kod wygasł — poproś o nowy' });
-  if (!/^\d{4,12}$/.test(String(newPin))) return jsonOut({ ok: false, error: 'PIN musi mieć od 4 do 12 cyfr' });
-  props.setProperty('APP_PIN', String(newPin));
+  const pin = String(newPin);
+  if (!/^\d{4,12}$/.test(pin)) return jsonOut({ ok: false, error: 'PIN musi mieć od 4 do 12 cyfr' });
   props.deleteProperty('PIN_RESET_CODE');
   props.deleteProperty('PIN_RESET_EXPIRES');
-  pushPinToSiblings(String(newPin));
-  return jsonOut({ ok: true });
+  const token = Utilities.getUuid();
+  props.setProperty('PIN_CONFIRM_TOKEN', token);
+  props.setProperty('PIN_CONFIRM_NEWPIN', pin);
+  props.setProperty('PIN_CONFIRM_EXPIRES', String(Date.now() + 30 * 60 * 1000));
+  const url = ScriptApp.getService().getUrl() + '?confirmPin=' + encodeURIComponent(token);
+  MailApp.sendEmail(PIN_RESET_EMAIL, 'Potwierdź zmianę PIN — Gotówka PF', 'Kliknij, żeby potwierdzić zmianę PIN-u:\n' + url + '\n\nWażne 30 minut. Jeśli to nie Ty, zignoruj — PIN się nie zmieni.');
+  return jsonOut({ ok: true, pending: true });
+}
+
+// Wywoływane przez GET po kliknięciu linku z maila — bez PIN-u/tokenu, bo mail
+// otwiera się często na innym urządzeniu niż appka.
+function confirmPinLink(token) {
+  const props = PropertiesService.getScriptProperties();
+  const storedToken = props.getProperty('PIN_CONFIRM_TOKEN');
+  const expires = Number(props.getProperty('PIN_CONFIRM_EXPIRES') || 0);
+  const newPin = props.getProperty('PIN_CONFIRM_NEWPIN');
+  if (!storedToken || token !== storedToken || Date.now() > expires || !newPin) {
+    return htmlPage('Link nieprawidłowy albo wygasł', 'Poproś o nowy kod w aplikacji i spróbuj ponownie.');
+  }
+  props.deleteProperty('PIN_CONFIRM_TOKEN');
+  props.deleteProperty('PIN_CONFIRM_EXPIRES');
+  props.deleteProperty('PIN_CONFIRM_NEWPIN');
+  props.setProperty('APP_PIN', newPin);
+  pushPinToSiblings(newPin);
+  return htmlPage('PIN zmieniony ✓', 'Możesz zamknąć to okno i wrócić do aplikacji.');
+}
+
+function htmlPage(title, msg) {
+  return HtmlService.createHtmlOutput(
+    '<html><body style="font-family:-apple-system,sans-serif;background:#12181d;color:#e8edf1;padding:40px 20px;text-align:center;">' +
+    '<h2>' + title + '</h2><p style="color:#8fa0ab">' + msg + '</p></body></html>'
+  );
 }
