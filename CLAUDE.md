@@ -61,9 +61,11 @@ pierwszym użyciu i rób sam wszystko, co nie wymaga jego logowania.
   index.html`), nigdy na prawdziwych danych.
 - POST do Apps Script zawsze z `Content-Type: text/plain;charset=utf-8`.
 - Format danych: jeden klucz `gotowkaPfState`, JSON `{ poolStart: liczba,
-  entries: [{id, date (YYYY-MM-DD), type: 'minus'|'plus', amount, note,
+  entries: [{id, date (YYYY-MM-DD), type: 'minus'|'plus', amount, note, who,
   createdAt}] }`. `minus` = pobranie (odejmuje od puli), `plus` = dopłata
-  (dolicza do puli). Zmiana formatu = migracja, nie rób tego mimochodem.
+  (dolicza do puli). `who` = kto dokonał wpisu (`'PF'` albo `'ZF'`, przycisk
+  w formularzu; brak pola u starych wpisów traktuj jako nieznane, nie pokazuj
+  plakietki). Zmiana formatu = migracja, nie rób tego mimochodem.
 - `localStorage` to natychmiastowy bufor, `fetch` do Arkusza idzie w tle —
   appka ma działać offline. Status połączenia: zielona kropka = zsynchronizowano,
   czerwona = błąd (serwer odrzucił/zły PIN), pomarańczowa = zapisano lokalnie

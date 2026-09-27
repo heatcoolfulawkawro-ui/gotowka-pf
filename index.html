@@ -118,6 +118,7 @@ function gotowkaPfShowVersion(v){
   .entry .sign.plus{background:rgba(76,175,125,.15); color:var(--green);}
   .entry .mid{flex:1; min-width:0;}
   .entry .date{font-size:.82rem; font-weight:600;}
+  .who-tag{font-size:.62rem; font-weight:700; color:var(--ink-dim); background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:1px 6px; vertical-align:middle;}
   .entry .note-txt{font-size:.74rem; color:var(--ink-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .entry .amt{font-family:var(--font-mono); font-weight:700; font-size:.86rem; flex:none;}
   .amt.minus{color:var(--red);} .amt.plus{color:var(--green);}
@@ -219,6 +220,11 @@ function gotowkaPfShowVersion(v){
   <div class="segmented">
     <button type="button" id="segMinus" class="active minus">Pobranie</button>
     <button type="button" id="segPlus" class="plus">Dopłata</button>
+  </div>
+
+  <div class="segmented" id="whoSeg">
+    <button type="button" data-who="PF" class="active">PF</button>
+    <button type="button" data-who="ZF">ZF</button>
   </div>
 
   <label class="field"><label>Kwota (zł)</label><input id="fKwota" inputmode="decimal" placeholder="np. 450" autocomplete="off"></label>
@@ -573,7 +579,7 @@ function renderList(){
   list.innerHTML = sorted.map(e => `
     <div class="entry" data-id="${e.id}">
       <div class="sign ${e.type}">${e.type==='minus'?'−':'+'}</div>
-      <div class="mid"><div class="date">${dm(e.date)}</div>${e.note ? `<div class="note-txt">${escHtml(e.note)}</div>` : ''}</div>
+      <div class="mid"><div class="date">${dm(e.date)}${e.who ? ` <span class="who-tag">${escHtml(e.who)}</span>` : ''}</div>${e.note ? `<div class="note-txt">${escHtml(e.note)}</div>` : ''}</div>
       <div class="amt ${e.type}">${e.type==='minus'?'−':'+'}${zl(e.amount)}</div>
     </div>`).join('');
 }
@@ -587,6 +593,7 @@ function openAdd(){
   document.getElementById('addTitle').textContent = 'Nowy wpis';
   document.getElementById('btnDelete').hidden = true;
   setSeg('segMinus');
+  setWho(lastWho());
   document.getElementById('fKwota').value = '';
   document.getElementById('fData').value = todayISO();
   document.getElementById('fNotatka').value = '';
@@ -601,6 +608,7 @@ function openEdit(id){
   document.getElementById('btnDelete').hidden = false;
   document.getElementById('btnDelete').textContent = 'Usuń wpis';
   setSeg(e.type==='minus' ? 'segMinus' : 'segPlus');
+  setWho(e.who || 'PF');
   document.getElementById('fKwota').value = e.amount;
   document.getElementById('fData').value = e.date;
   document.getElementById('fNotatka').value = e.note || '';
@@ -626,6 +634,20 @@ function setSeg(id){
   updatePreview();
 }
 function currentType(){ return document.getElementById('segMinus').classList.contains('active') ? 'minus' : 'plus'; }
+
+function setWho(who){
+  [...document.getElementById('whoSeg').children].forEach(b => b.classList.toggle('active', b.dataset.who===who));
+}
+function currentWho(){
+  const btn = document.getElementById('whoSeg').querySelector('.active');
+  return btn ? btn.dataset.who : 'PF';
+}
+function lastWho(){ try{ return localStorage.getItem('gotowkaPfLastWho') || 'PF'; }catch(e){ return 'PF'; } }
+document.getElementById('whoSeg').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-who]');
+  if(!btn) return;
+  setWho(btn.dataset.who);
+});
 
 function updatePreview(){
   const kwota = parseFloat((document.getElementById('fKwota').value||'').replace(',','.')) || 0;
@@ -659,11 +681,13 @@ document.getElementById('btnSave').addEventListener('click', ()=>{
   const date = document.getElementById('fData').value || todayISO();
   const note = document.getElementById('fNotatka').value.trim();
   const type = currentType();
+  const who = currentWho();
+  try{ localStorage.setItem('gotowkaPfLastWho', who); }catch(e){}
   if(editingId){
     const e = state.entries.find(x=>x.id===editingId);
-    if(e){ e.amount=kwota; e.date=date; e.note=note; e.type=type; }
+    if(e){ e.amount=kwota; e.date=date; e.note=note; e.type=type; e.who=who; }
   }else{
-    state.entries.push({ id: uid(), date, type, amount: kwota, note, createdAt: Date.now() });
+    state.entries.push({ id: uid(), date, type, amount: kwota, note, who, createdAt: Date.now() });
   }
   closeAddView();
   render();
