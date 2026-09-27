@@ -10,7 +10,7 @@ on:
 env:
   # Istniejące wdrożenie Web App — to samo ID co w GAS_URL w index.html
   # (jawne, nie jest sekretem). URL /exec ma zostać bez zmian.
-  GAS_DEPLOYMENT_ID: __DEPLOYMENT_ID__
+  GAS_DEPLOYMENT_ID: AKfycbxa7mnwnG-iuFvYKqx4-callLWoLGwXzEHk4p3WnU9TdJ7_agcLWNYafWN6KQmIe__g
 
 jobs:
   deploy:
