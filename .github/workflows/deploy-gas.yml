@@ -1,0 +1,39 @@
+name: Deploy Apps Script backend
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Kod.gs'
+      - 'appsscript.json'
+  workflow_dispatch: {}
+
+env:
+  # Istniejące wdrożenie Web App — to samo ID co w GAS_URL w index.html
+  # (jawne, nie jest sekretem). URL /exec ma zostać bez zmian.
+  GAS_DEPLOYMENT_ID: __DEPLOYMENT_ID__
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install clasp
+        run: npm install -g @google/clasp@latest
+      - name: Restore clasp login credentials
+        run: |
+          if [ -z "$CLASPRC_JSON" ]; then
+            echo "::error::Brak sekretu CLASPRC_JSON (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+          printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      - name: Push to Apps Script
+        run: clasp push -f
+      # --deploymentId jest obowiązkowe: bez niego clasp tworzy NOWE
+      # wdrożenie (nowy URL) zamiast zaktualizować istniejące.
+      - name: Deploy new version to the existing web app (same URL)
+        run: clasp deploy --deploymentId "$GAS_DEPLOYMENT_ID" --description "auto-deploy $(date -u +%Y-%m-%dT%H:%M:%SZ)"

@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<script>
+// Skróty na ekranie głównym telefonu potrafią pokazywać zbuforowaną,
+// starą wersję strony. Ten kod po cichu sprawdza w tle prawdziwą
+// aktualną wersję na serwerze (z pominięciem cache przeglądarki) i
+// odświeża stronę automatycznie, jeśli wykryje nowszą.
+function gotowkaPfFormatVersion(raw){
+  var d = new Date(raw);
+  if(isNaN(d.getTime())) return raw;
+  function pad(n){ return String(n).padStart(2,'0'); }
+  return pad(d.getDate())+'.'+pad(d.getMonth()+1)+' '+pad(d.getHours())+':'+pad(d.getMinutes());
+}
+function gotowkaPfShowVersion(v){
+  window.__gotowkaPfVersion = v;
+  var el = document.getElementById('pageVersion');
+  if(el) el.textContent = 'wersja strony: ' + gotowkaPfFormatVersion(v);
+}
+(function(){
+  var cached = localStorage.getItem('gotowkapf_page_version');
+  if(cached) gotowkaPfShowVersion(cached);
+  try{
+    fetch(location.pathname, { method:'HEAD', cache:'no-store' }).then(function(res){
+      var v = res.headers.get('last-modified') || res.headers.get('etag');
+      if(!v) return;
+      var stored = localStorage.getItem('gotowkapf_page_version');
+      localStorage.setItem('gotowkapf_page_version', v);
+      gotowkaPfShowVersion(v);
+      if(stored && stored !== v) location.replace(location.pathname + '?v=' + Date.now());
+    }).catch(function(){});
+  }catch(e){}
+})();
+</script>
+<title>Gotówka PF</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
+
+  :root{
+    --bg:#12181d; --panel:#1b232a; --panel2:#212b33; --line:#2c3841;
+    --ink:#e8edf1; --ink-dim:#8fa0ab; --amber:#e8a33d; --green:#4caf7d;
+    --red:#d9695f; --blue:#5b9bd5; --radius:12px;
+    --font-display:'Manrope',sans-serif; --font-body:'Public Sans',sans-serif;
+    --font-mono:'JetBrains Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); -webkit-font-smoothing:antialiased;
+    padding-inline:14px; padding-block:0 100px;
+  }
+  h1,h2,h3{font-family:var(--font-display); text-wrap:balance; margin:0;}
+  .mono{font-family:var(--font-mono); font-variant-numeric:tabular-nums;}
+  button{font-family:inherit;}
+  a{color:inherit;}
+
+  .topbar{
+    position:sticky; top:0; z-index:10; background:var(--bg);
+    padding-block:14px 8px; margin-inline:-14px; padding-inline:14px;
+  }
+  .brand{display:flex; align-items:baseline; gap:8px; margin-bottom:2px; flex-wrap:wrap;}
+  .brand .name{font-family:var(--font-display); font-weight:800; font-size:1.15rem; letter-spacing:.2px;}
+  .brand .sub{color:var(--ink-dim); font-size:.78rem;}
+  .sync{margin-left:auto; display:flex; align-items:center; gap:5px; font-size:.68rem; color:var(--ink-dim);}
+  .sync .dot{width:7px; height:7px; border-radius:50%; background:var(--ink-dim); flex:0 0 auto;}
+  .sync.ok .dot{background:var(--green);}
+  .sync.local .dot{background:var(--amber);}
+  .sync.err .dot{background:var(--red);}
+  .page-version{font-size:.65rem; color:var(--ink-dim); opacity:.7; margin:2px 0 4px; cursor:pointer;}
+  .pin-btn{
+    margin-left:8px; flex:0 0 auto; background:var(--panel2); border:1px solid var(--line);
+    color:var(--ink-dim); border-radius:20px; padding:3px 9px; font-size:.68rem; cursor:pointer;
+  }
+
+  .note{
+    font-size:.74rem; color:var(--ink-dim); background:var(--panel2); border:1px solid var(--line);
+    border-radius:var(--radius); padding:9px 11px; margin:10px 0 12px; line-height:1.4;
+  }
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:12px;}
+  .hero .label{font-size:.7rem; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em;}
+  .hero .big{font-family:var(--font-mono); font-size:2.3rem; font-weight:700; line-height:1.1; margin:4px 0 10px;}
+  .track{height:8px; border-radius:99px; background:var(--panel2); overflow:hidden; margin-bottom:8px;}
+  .fill{height:100%; background:var(--amber); border-radius:99px 0 0 99px; transition:width .25s;}
+  .hero .pct{font-size:.8rem; color:var(--ink-dim); margin-bottom:14px;}
+  .hero .pct b{color:var(--ink);}
+  .breakdown{display:flex; gap:8px;}
+  .breakdown > div{flex:1; background:var(--panel2); border-radius:8px; padding:8px 10px; position:relative;}
+  .breakdown .k{font-size:.65rem; color:var(--ink-dim); margin-bottom:2px; display:flex; align-items:center; gap:4px;}
+  .breakdown .v{font-family:var(--font-mono); font-size:.86rem; font-weight:700;}
+  .v.plus{color:var(--green);} .v.minus{color:var(--red);}
+  .editpen{background:none; border:none; color:var(--ink-dim); font-size:.7rem; cursor:pointer; padding:0;}
+
+  .segmented{display:flex; background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:3px; gap:2px; margin-bottom:14px;}
+  .segmented button{flex:1; border:none; background:transparent; color:var(--ink-dim); font-family:var(--font-body); font-size:.8rem; font-weight:600; padding:8px 0; border-radius:999px; cursor:pointer;}
+  .segmented button.active{background:var(--panel); color:var(--ink); box-shadow:0 0 0 1px var(--line) inset;}
+  .segmented button.active.minus{color:var(--red);}
+  .segmented button.active.plus{color:var(--green);}
+
+  .trend-top{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px;}
+  .trend-top .label{font-size:.7rem; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em;}
+  .trend-top .stat{font-family:var(--font-mono); font-size:1.3rem; font-weight:700;}
+  .trend-top .stat span{font-family:var(--font-body); font-size:.76rem; font-weight:400; color:var(--ink-dim);}
+  .chart{display:flex; align-items:flex-end; gap:6px; height:100px; padding-top:18px; overflow-x:auto;}
+  .bar-wrap{flex:1; min-width:26px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;}
+  .bar-amt{font-family:var(--font-mono); font-size:.6rem; color:var(--ink-dim); margin-bottom:4px; white-space:nowrap;}
+  .bar{width:100%; max-width:26px; background:var(--amber); border-radius:4px 4px 0 0; min-height:2px;}
+  .bar-date{font-size:.62rem; color:var(--ink-dim); margin-top:6px; white-space:nowrap;}
+  .chart-empty{font-size:.8rem; color:var(--ink-dim); padding:20px 4px; text-align:center;}
+
+  .section-label{font-size:.7rem; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em; margin:16px 2px 8px;}
+  .entry{display:flex; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid var(--line); cursor:pointer;}
+  .entry:last-child{border-bottom:none;}
+  .entry .sign{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none;}
+  .entry .sign.minus{background:rgba(217,105,95,.15); color:var(--red);}
+  .entry .sign.plus{background:rgba(76,175,125,.15); color:var(--green);}
+  .entry .mid{flex:1; min-width:0;}
+  .entry .date{font-size:.82rem; font-weight:600;}
+  .entry .note-txt{font-size:.74rem; color:var(--ink-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .entry .amt{font-family:var(--font-mono); font-weight:700; font-size:.86rem; flex:none;}
+  .amt.minus{color:var(--red);} .amt.plus{color:var(--green);}
+  .empty-list{font-size:.82rem; color:var(--ink-dim); text-align:center; padding:22px 4px;}
+
+  .fab{
+    position:fixed; right:16px; bottom:24px; z-index:8;
+    background:var(--amber); color:#20160a; border:none; border-radius:999px;
+    padding:14px 20px; font-size:.92rem; font-weight:800; box-shadow:0 6px 18px rgba(0,0,0,.4);
+    display:flex; align-items:center; gap:8px; cursor:pointer;
+  }
+  @media (min-width:640px){ .fab{ right:calc(50% - 260px + 16px); } body{max-width:520px; margin-inline:auto;} }
+
+  .pagehead{display:flex; align-items:center; gap:10px; padding-block:14px 10px; position:sticky; top:0; background:var(--bg); z-index:9;}
+  .backbtn{background:var(--panel2); border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:8px 12px; font-size:.85rem; cursor:pointer;}
+  .pagehead h2{font-size:1.05rem;}
+
+  .field{display:block; margin-bottom:14px;}
+  .field label{font-size:.72rem; color:var(--ink-dim); margin-bottom:6px; display:block;}
+  .field input{width:100%; background:var(--panel2); border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:12px; font-size:16px; font-family:inherit;}
+  .field input:focus{outline:2px solid var(--amber); outline-offset:-1px;}
+  .field-error{font-size:.72rem; color:var(--red); margin-top:-8px; margin-bottom:12px; display:none;}
+  .field-error.show{display:block;}
+
+  .preview{background:var(--panel2); border:1px dashed var(--line); border-radius:8px; padding:10px 12px; font-size:.8rem; color:var(--ink-dim); margin-bottom:16px;}
+  .preview b{color:var(--ink); font-family:var(--font-mono);}
+  .savebtn{width:100%; background:var(--amber); color:#20160a; border:none; border-radius:10px; padding:14px; font-size:.92rem; font-weight:800; cursor:pointer;}
+  .delbtn{width:100%; background:transparent; border:none; color:var(--red); padding:14px; font-size:.82rem; cursor:pointer; margin-top:6px;}
+
+  .overlay{position:fixed; inset:0; background:rgba(8,11,14,.72); z-index:30; display:none; align-items:flex-end; justify-content:center;}
+  .overlay.open{display:flex;}
+  .sheet{background:var(--panel); border:1px solid var(--line); border-radius:16px 16px 0 0; width:100%; max-width:480px; padding:18px 16px 22px; max-height:88vh; overflow-y:auto;}
+  .sheet-actions{display:flex; gap:8px; margin-top:14px;}
+  .sheet-actions button{flex:1; border:none; border-radius:8px; padding:12px; font-size:.85rem; font-weight:700; cursor:pointer;}
+  .btn-cancel{background:var(--panel2); color:var(--ink-dim); border:1px solid var(--line) !important;}
+  .btn-save{background:var(--amber); color:#1b1204;}
+
+  .toast{position:fixed; left:50%; bottom:90px; transform:translateX(-50%) translateY(20px); background:var(--panel2); border:1px solid var(--line); color:var(--ink); padding:10px 16px; border-radius:10px; font-size:.82rem; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:40; display:flex; align-items:center; gap:8px; max-width:88vw;}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  .toast .tdot{width:7px;height:7px;border-radius:50%;background:var(--green); flex:0 0 auto;}
+  .toast.err .tdot{background:var(--red);}
+
+  [hidden]{display:none!important;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="name">💵 Gotówka PF</span>
+    <span class="sub">RA-STER · pula gotówki</span>
+    <span class="sync local" id="syncIndicator"><span class="dot"></span><span id="syncText">lokalnie</span></span>
+    <button class="pin-btn" onclick="location.href='https://heatcoolfulawkawro-ui.github.io/'" title="Rozdzielacz">🏠</button>
+    <button class="pin-btn" onclick="openPinChangeSheet()" title="Zmień PIN">🔒 PIN</button>
+  </div>
+  <div class="page-version" id="pageVersion" onclick="location.replace(location.pathname + '?v=' + Date.now())" title="Stuknij, żeby wymusić pobranie najnowszej wersji">wersja strony: —</div>
+</div>
+
+<div id="viewMain">
+  <div class="card hero">
+    <div class="label">Zostało</div>
+    <div class="big mono" id="stZostalo">0 zł</div>
+    <div class="track"><div class="fill" id="stFill" style="width:0%"></div></div>
+    <div class="pct">Wykorzystano <b id="stPct">0%</b> z puli <b id="stPula">0 zł</b></div>
+    <div class="breakdown">
+      <div><div class="k">Pula startowa <button class="editpen" onclick="openPoolEdit()" title="Zmień pulę startową">✎</button></div><div class="v" id="stStart">0 zł</div></div>
+      <div><div class="k">Dopłaty</div><div class="v plus" id="stDoplaty">+0 zł</div></div>
+      <div><div class="k">Wydano</div><div class="v minus" id="stWydano">−0 zł</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="trend-top">
+      <div>
+        <div class="label">Rytm pobrań</div>
+        <div class="stat mono" id="stAvg">— <span>średnio</span></div>
+      </div>
+    </div>
+    <div class="segmented" id="chartSeg">
+      <button type="button" data-mode="day" class="active">Dzień</button>
+      <button type="button" data-mode="week">Tydzień</button>
+      <button type="button" data-mode="month">Miesiąc</button>
+    </div>
+    <div class="chart" id="chart"></div>
+  </div>
+
+  <div class="section-label">Historia</div>
+  <div class="card" style="padding:2px 16px" id="entryList"></div>
+</div>
+
+<button class="fab" id="btnAdd">＋ Nowy wpis</button>
+
+<div id="viewAdd" hidden>
+  <div class="pagehead">
+    <button class="backbtn" id="btnBack">‹ Wróć</button>
+    <h2 id="addTitle">Nowy wpis</h2>
+  </div>
+
+  <div class="segmented">
+    <button type="button" id="segMinus" class="active minus">Pobranie</button>
+    <button type="button" id="segPlus" class="plus">Dopłata</button>
+  </div>
+
+  <label class="field"><label>Kwota (zł)</label><input id="fKwota" inputmode="decimal" placeholder="np. 450" autocomplete="off"></label>
+  <div class="field-error" id="errKwota">Podaj kwotę większą od zera.</div>
+
+  <label class="field"><label>Data</label><input id="fData" type="date"></label>
+
+  <label class="field"><label>Notatka (opcjonalnie)</label><input id="fNotatka" placeholder="np. szelki" autocomplete="off"></label>
+
+  <div class="preview" id="fPreview">Po zapisaniu zostanie: <b>0 zł</b></div>
+
+  <button class="savebtn" id="btnSave">Zapisz</button>
+  <button class="delbtn" id="btnDelete" hidden>Usuń wpis</button>
+</div>
+
+<div class="overlay" id="poolEditOverlay">
+  <div class="sheet">
+    <h3>Pula startowa</h3>
+    <label class="field"><label>Nowa pula startowa (zł)</label><input id="poolNewVal" inputmode="decimal"></label>
+    <div class="sheet-actions">
+      <button class="btn-cancel" onclick="closePoolEdit()">Anuluj</button>
+      <button class="btn-save" onclick="savePoolEdit()">Zapisz</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span class="tdot"></span><span id="toast-text"></span></div>
+
+<div class="overlay" id="pinGateOverlay" style="align-items:center;">
+  <div class="sheet" style="border-radius:16px; max-width:320px;">
+    <h3>🔒 Wpisz PIN</h3>
+    <div class="field"><input id="pinGateInput" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN"></div>
+    <div class="field-error" id="pinGateError">Błędny PIN — spróbuj ponownie.</div>
+    <div class="sheet-actions">
+      <button class="btn-save" style="flex:1" onclick="submitPinGate()">Odblokuj</button>
+    </div>
+    <div style="text-align:center; margin-top:12px;">
+      <a href="#" onclick="openPinChangeFromGate(); return false;" style="color:var(--ink-dim); font-size:.78rem;">Zapomniałeś PIN-u? Zresetuj przez e-mail</a>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="pinChangeOverlay">
+  <div class="sheet">
+    <h3>Zmień PIN</h3>
+    <div id="pinChangeStep1">
+      <p style="font-size:.82rem; color:var(--ink-dim); margin:0 0 14px;">Wyślemy jednorazowy kod na Twój e-mail.</p>
+      <div class="sheet-actions">
+        <button class="btn-cancel" onclick="cancelPinChangeSheet()">Anuluj</button>
+        <button class="btn-save" onclick="requestPinResetCode()">Wyślij kod</button>
+      </div>
+    </div>
+    <div id="pinChangeStep2" style="display:none;">
+      <div class="field"><label>Kod z e-maila</label><input id="pinResetCode" type="text" inputmode="numeric" placeholder="6 cyfr"></div>
+      <div class="field"><label>Nowy PIN</label><input id="pinResetNew" type="password" inputmode="numeric" placeholder="np. 10 cyfr"></div>
+      <div class="field-error" id="pinChangeError"></div>
+      <div class="sheet-actions">
+        <button class="btn-cancel" onclick="cancelPinChangeSheet()">Anuluj</button>
+        <button class="btn-save" onclick="confirmPinResetCode()">Zmień</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ====================== KONFIGURACJA ====================== */
+const GAS_URL = 'https://script.google.com/macros/s/__DEPLOYMENT_ID__/exec';
+const STORAGE_KEY = 'gotowkaPfState';
+const configured = () => GAS_URL.indexOf('__DEPLOYMENT_ID__') < 0;
+
+/* ====================== PIN ====================== */
+const PIN_STORAGE_KEY = 'gotowkaPfPin';
+const AUTH_FAIL_TEXT = '__BRAK_AUTORYZACJI__';
+function getPin(){ return localStorage.getItem(PIN_STORAGE_KEY) || ''; }
+function setPin(p){ localStorage.setItem(PIN_STORAGE_KEY, p); }
+function clearPin(){ localStorage.removeItem(PIN_STORAGE_KEY); }
+function showPinGate(){ document.getElementById('pinGateOverlay').classList.add('open'); document.getElementById('pinGateInput').focus(); }
+function hidePinGate(){ document.getElementById('pinGateOverlay').classList.remove('open'); }
+
+async function submitPinGate(){
+  const pinVal = document.getElementById('pinGateInput').value.trim();
+  if(!pinVal) return;
+  const errEl = document.getElementById('pinGateError');
+  errEl.classList.remove('show');
+  try{
+    const res = await fetch(GAS_URL + '?key=' + encodeURIComponent(STORAGE_KEY) + '&pin=' + encodeURIComponent(pinVal));
+    const text = await res.text();
+    if(text === AUTH_FAIL_TEXT){ errEl.classList.add('show'); return; }
+    setPin(pinVal);
+    hidePinGate();
+    applyRemoteState(text);
+  }catch(e){
+    // Offline — nie da się zweryfikować PIN-u teraz, ale nie ma sensu
+    // trzymać kogoś w terenie bez zasięgu z dala od własnych, lokalnie
+    // już zapisanych danych.
+    setPin(pinVal);
+    hidePinGate();
+  }
+}
+
+function applyRemoteState(text){
+  if(!text) return;
+  try{
+    const remote = JSON.parse(text);
+    if(remote && typeof remote.poolStart === 'number' && Array.isArray(remote.entries)){
+      state = remote;
+      setSyncStatus('ok');
+      render();
+    }
+  }catch(e){ /* nieprawidłowa odpowiedź — zostajemy przy danych lokalnych */ }
+}
+
+let pinChangeFromGate = false;
+function openPinChangeSheet(){
+  pinChangeFromGate = false;
+  document.getElementById('pinChangeStep1').style.display='';
+  document.getElementById('pinChangeStep2').style.display='none';
+  document.getElementById('pinChangeError').classList.remove('show');
+  document.getElementById('pinResetCode').value='';
+  document.getElementById('pinResetNew').value='';
+  document.getElementById('pinChangeOverlay').classList.add('open');
+}
+function openPinChangeFromGate(){ hidePinGate(); openPinChangeSheet(); pinChangeFromGate = true; }
+function closePinChangeSheet(){ document.getElementById('pinChangeOverlay').classList.remove('open'); }
+function cancelPinChangeSheet(){
+  closePinChangeSheet();
+  if(pinChangeFromGate){ pinChangeFromGate = false; showPinGate(); }
+}
+
+async function requestPinResetCode(){
+  if(!configured()){ showToast('Backend jeszcze niepodłączony', true); return; }
+  try{
+    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'request_pin_reset' }) });
+    const data = await res.json();
+    if(!data.ok){ showToast(data.error || 'Nie udało się wysłać kodu', true); return; }
+    document.getElementById('pinChangeStep1').style.display='none';
+    document.getElementById('pinChangeStep2').style.display='';
+    showToast('Kod wysłany na e-mail');
+  }catch(e){ showToast('Brak połączenia', true); }
+}
+
+async function confirmPinResetCode(){
+  const code = document.getElementById('pinResetCode').value.trim();
+  const newPin = document.getElementById('pinResetNew').value.trim();
+  const errEl = document.getElementById('pinChangeError');
+  errEl.classList.remove('show');
+  if(!code || !newPin){ errEl.textContent='Wpisz kod i nowy PIN.'; errEl.classList.add('show'); return; }
+  try{
+    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'confirm_pin_reset', code, newPin }) });
+    const data = await res.json();
+    if(!data.ok){ errEl.textContent = data.error || 'Błąd'; errEl.classList.add('show'); return; }
+    setPin(newPin);
+    pinChangeFromGate = false;
+    closePinChangeSheet();
+    hidePinGate();
+    showToast('PIN zmieniony');
+    try{
+      const r2 = await fetch(GAS_URL + '?key=' + encodeURIComponent(STORAGE_KEY) + '&pin=' + encodeURIComponent(newPin));
+      const t2 = await r2.text();
+      if(t2 !== AUTH_FAIL_TEXT) applyRemoteState(t2);
+    }catch(e2){ /* offline — dane lokalne zostają, dociągnie się później */ }
+  }catch(e){ errEl.textContent='Brak połączenia'; errEl.classList.add('show'); }
+}
+
+/* ====================== STAN / DANE ====================== */
+function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2)); }
+
+function seedState(){
+  return { poolStart: 4650, entries: [] };
+}
+
+let state = loadState();
+
+function loadState(){
+  try{ const raw = localStorage.getItem(STORAGE_KEY); if(raw) return Object.assign(seedState(), JSON.parse(raw)); }catch(e){}
+  return seedState();
+}
+
+function saveState(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+  setSyncStatus('local');
+  syncRemote();
+}
+
+function setSyncStatus(kind){
+  const el = document.getElementById('syncIndicator');
+  const txt = document.getElementById('syncText');
+  el.className = 'sync ' + kind;
+  txt.textContent = kind==='ok' ? 'zsynchronizowano' : kind==='err' ? 'błąd synchronizacji' : 'zapisano lokalnie';
+}
+
+async function syncRemote(){
+  if(!configured()) return;
+  try{
+    const res = await fetch(GAS_URL, {
+      method: 'POST', headers: {'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ key: STORAGE_KEY, value: JSON.stringify(state), pin: getPin() })
+    });
+    const data = await res.json().catch(()=>null);
+    if(data && data.ok === false){
+      // PIN zmieniony gdzie indziej (np. przez sync z innej appki PF) — dane
+      // zostają bezpieczne lokalnie, ale trzeba wpisać PIN ponownie.
+      clearPin();
+      setSyncStatus('err');
+      showPinGate();
+      return;
+    }
+    if(res.ok) setSyncStatus('ok'); else setSyncStatus('err');
+  }catch(e){ setSyncStatus('err'); }
+}
+
+// Telefon wraca do zasięgu — appka sama dogania zaległy zapis.
+window.addEventListener('online', syncRemote);
+
+async function loadRemoteOnStart(){
+  if(!configured()) return;
+  if(!getPin()){ showPinGate(); return; }
+  try{
+    const res = await fetch(GAS_URL + '?key=' + encodeURIComponent(STORAGE_KEY) + '&pin=' + encodeURIComponent(getPin()));
+    const text = await res.text();
+    if(text === AUTH_FAIL_TEXT){ clearPin(); showPinGate(); return; }
+    applyRemoteState(text);
+  }catch(e){ /* offline — zostajemy przy danych lokalnych */ }
+}
+
+/* ====================== POMOCNICZE / DATY ====================== */
+function pad(n){ return String(n).padStart(2,'0'); }
+function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function dm(iso){ const [y,m,d]=iso.split('-'); return `${d}.${m}.${y}`; }
+function daysBetween(iso1, iso2){
+  const [y1,m1,d1] = iso1.split('-').map(Number);
+  const [y2,m2,d2] = iso2.split('-').map(Number);
+  return Math.round((Date.UTC(y2,m2-1,d2) - Date.UTC(y1,m1-1,d1)) / 86400000);
+}
+function addDaysIso(iso, n){
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y,m-1,d)); dt.setUTCDate(dt.getUTCDate()+n);
+  return dt.toISOString().slice(0,10);
+}
+function isoWeekStart(iso){
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y,m-1,d));
+  const dow = (dt.getUTCDay()+6)%7; // 0 = poniedziałek
+  dt.setUTCDate(dt.getUTCDate()-dow);
+  return dt.toISOString().slice(0,10);
+}
+function monthKey(iso){ return iso.slice(0,7); }
+function addMonthsKey(mk, n){
+  const [y,m] = mk.split('-').map(Number);
+  const total = y*12 + (m-1) + n;
+  return Math.floor(total/12) + '-' + pad(total%12+1);
+}
+function fmtDateShort(iso){ const [,m,d]=iso.split('-'); return `${d}.${m}`; }
+const MONTHS_SHORT = ['sty','lut','mar','kwi','maj','cze','lip','sie','wrz','paź','lis','gru'];
+function zl(v){ return Math.round(v).toLocaleString('pl-PL') + ' zł'; }
+
+/* ====================== LICZENIE ====================== */
+function computeStats(){
+  let wydano=0, doplaty=0;
+  state.entries.forEach(e=>{ if(e.type==='minus') wydano+=e.amount; else doplaty+=e.amount; });
+  const pula = state.poolStart + doplaty;
+  const zostalo = pula - wydano;
+  const pct = pula>0 ? Math.round(wydano/pula*100) : 0;
+  return {wydano, doplaty, pula, zostalo, pct};
+}
+
+function minusEntries(exceptId){
+  return state.entries.filter(e=>e.type==='minus' && e.id!==exceptId);
+}
+
+function avgDaysBetween(){
+  const dates = minusEntries().map(e=>e.date).sort();
+  if(dates.length<2) return null;
+  let sum=0;
+  for(let i=1;i<dates.length;i++) sum += daysBetween(dates[i-1], dates[i]);
+  return Math.round(sum/(dates.length-1)*10)/10;
+}
+
+let chartMode = 'day';
+
+function chartData(){
+  const list = minusEntries();
+  if(chartMode==='day'){
+    return list.slice().sort((a,b)=> a.date<b.date?-1:1).slice(-10)
+      .map(e=>({label: fmtDateShort(e.date), value: e.amount}));
+  }
+  if(chartMode==='week'){
+    const curStart = isoWeekStart(todayISO());
+    const weeks = []; for(let i=7;i>=0;i--) weeks.push(addDaysIso(curStart, -7*i));
+    const sums = {}; weeks.forEach(w=>sums[w]=0);
+    list.forEach(e=>{ const wk=isoWeekStart(e.date); if(wk in sums) sums[wk]+=e.amount; });
+    return weeks.map(w=>({label: fmtDateShort(w), value: sums[w]}));
+  }
+  // month
+  const curMonth = monthKey(todayISO());
+  const months = []; for(let i=5;i>=0;i--) months.push(addMonthsKey(curMonth, -i));
+  const sums = {}; months.forEach(m=>sums[m]=0);
+  list.forEach(e=>{ const mk=monthKey(e.date); if(mk in sums) sums[mk]+=e.amount; });
+  return months.map(m=>({label: MONTHS_SHORT[+m.split('-')[1]-1], value: sums[m]}));
+}
+
+/* ====================== RENDER ====================== */
+function render(){
+  const s = computeStats();
+  document.getElementById('stZostalo').textContent = zl(s.zostalo);
+  document.getElementById('stFill').style.width = Math.min(100, Math.max(0,s.pct)) + '%';
+  document.getElementById('stPct').textContent = s.pct + '%';
+  document.getElementById('stPula').textContent = zl(s.pula);
+  document.getElementById('stStart').textContent = zl(state.poolStart);
+  document.getElementById('stDoplaty').textContent = '+' + zl(s.doplaty);
+  document.getElementById('stWydano').textContent = '−' + zl(s.wydano);
+
+  const avg = avgDaysBetween();
+  document.getElementById('stAvg').innerHTML = (avg==null ? '—' : ('~' + avg + ' dni')) + ' <span>średnio</span>';
+
+  renderChart();
+  renderList();
+}
+
+function renderChart(){
+  const data = chartData();
+  const chart = document.getElementById('chart');
+  chart.innerHTML = '';
+  if(!data.some(d=>d.value>0)){
+    chart.className = 'chart-empty';
+    chart.textContent = 'Brak pobrań w tym zakresie.';
+    return;
+  }
+  chart.className = 'chart';
+  const max = data.reduce((m,d)=>Math.max(m,d.value),1);
+  data.forEach(d=>{
+    const wrap = document.createElement('div'); wrap.className='bar-wrap';
+    const amt = document.createElement('div'); amt.className='bar-amt'; amt.textContent = d.value ? Math.round(d.value) : '';
+    const bar = document.createElement('div'); bar.className='bar';
+    bar.style.height = Math.max(2, Math.round(d.value/max*100)) + '%';
+    const lbl = document.createElement('div'); lbl.className='bar-date'; lbl.textContent = d.label;
+    wrap.appendChild(amt); wrap.appendChild(bar); wrap.appendChild(lbl);
+    chart.appendChild(wrap);
+  });
+}
+
+function renderList(){
+  const list = document.getElementById('entryList');
+  const sorted = state.entries.slice().sort((a,b)=> a.date===b.date ? (b.createdAt-a.createdAt) : (a.date<b.date?1:-1));
+  if(!sorted.length){ list.innerHTML = '<div class="empty-list">Brak wpisów — dodaj pierwszy przyciskiem „＋ Nowy wpis”.</div>'; return; }
+  list.innerHTML = sorted.map(e => `
+    <div class="entry" data-id="${e.id}">
+      <div class="sign ${e.type}">${e.type==='minus'?'−':'+'}</div>
+      <div class="mid"><div class="date">${dm(e.date)}</div>${e.note ? `<div class="note-txt">${escHtml(e.note)}</div>` : ''}</div>
+      <div class="amt ${e.type}">${e.type==='minus'?'−':'+'}${zl(e.amount)}</div>
+    </div>`).join('');
+}
+function escHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ====================== DODAWANIE / EDYCJA WPISU ====================== */
+let editingId = null;
+
+function openAdd(){
+  editingId = null;
+  document.getElementById('addTitle').textContent = 'Nowy wpis';
+  document.getElementById('btnDelete').hidden = true;
+  setSeg('segMinus');
+  document.getElementById('fKwota').value = '';
+  document.getElementById('fData').value = todayISO();
+  document.getElementById('fNotatka').value = '';
+  document.getElementById('errKwota').classList.remove('show');
+  showAddView();
+}
+function openEdit(id){
+  const e = state.entries.find(x=>x.id===id);
+  if(!e) return;
+  editingId = id;
+  document.getElementById('addTitle').textContent = 'Edytuj wpis';
+  document.getElementById('btnDelete').hidden = false;
+  document.getElementById('btnDelete').textContent = 'Usuń wpis';
+  setSeg(e.type==='minus' ? 'segMinus' : 'segPlus');
+  document.getElementById('fKwota').value = e.amount;
+  document.getElementById('fData').value = e.date;
+  document.getElementById('fNotatka').value = e.note || '';
+  document.getElementById('errKwota').classList.remove('show');
+  showAddView();
+}
+function showAddView(){
+  document.getElementById('viewMain').hidden = true;
+  document.getElementById('btnAdd').hidden = true;
+  document.getElementById('viewAdd').hidden = false;
+  updatePreview();
+  window.scrollTo(0,0);
+}
+function closeAddView(){
+  document.getElementById('viewAdd').hidden = true;
+  document.getElementById('viewMain').hidden = false;
+  document.getElementById('btnAdd').hidden = false;
+  window.scrollTo(0,0);
+}
+function setSeg(id){
+  document.getElementById('segMinus').classList.toggle('active', id==='segMinus');
+  document.getElementById('segPlus').classList.toggle('active', id==='segPlus');
+  updatePreview();
+}
+function currentType(){ return document.getElementById('segMinus').classList.contains('active') ? 'minus' : 'plus'; }
+
+function updatePreview(){
+  const kwota = parseFloat((document.getElementById('fKwota').value||'').replace(',','.')) || 0;
+  const type = currentType();
+  let wydano=0, doplaty=0;
+  state.entries.forEach(e=>{
+    if(e.id===editingId) return;
+    if(e.type==='minus') wydano+=e.amount; else doplaty+=e.amount;
+  });
+  if(type==='minus') wydano+=kwota; else doplaty+=kwota;
+  const pula = state.poolStart + doplaty;
+  const zostalo = pula - wydano;
+  const pct = pula>0 ? Math.round(wydano/pula*100) : 0;
+  document.getElementById('fPreview').innerHTML = `Po zapisaniu zostanie: <b>${zl(zostalo)}</b> · wykorzystano <b>${pct}%</b>`;
+}
+
+document.getElementById('btnAdd').addEventListener('click', openAdd);
+document.getElementById('btnBack').addEventListener('click', closeAddView);
+document.getElementById('segMinus').addEventListener('click', ()=>setSeg('segMinus'));
+document.getElementById('segPlus').addEventListener('click', ()=>setSeg('segPlus'));
+document.getElementById('fKwota').addEventListener('input', updatePreview);
+document.getElementById('entryList').addEventListener('click', e=>{
+  const row = e.target.closest('.entry');
+  if(row) openEdit(row.dataset.id);
+});
+
+document.getElementById('btnSave').addEventListener('click', ()=>{
+  const kwota = parseFloat((document.getElementById('fKwota').value||'').replace(',','.')) || 0;
+  if(!(kwota>0)){ document.getElementById('errKwota').classList.add('show'); return; }
+  document.getElementById('errKwota').classList.remove('show');
+  const date = document.getElementById('fData').value || todayISO();
+  const note = document.getElementById('fNotatka').value.trim();
+  const type = currentType();
+  if(editingId){
+    const e = state.entries.find(x=>x.id===editingId);
+    if(e){ e.amount=kwota; e.date=date; e.note=note; e.type=type; }
+  }else{
+    state.entries.push({ id: uid(), date, type, amount: kwota, note, createdAt: Date.now() });
+  }
+  closeAddView();
+  render();
+  saveState();
+});
+
+document.getElementById('btnDelete').addEventListener('click', function(){
+  if(this.dataset.sure !== '1'){ this.dataset.sure='1'; this.textContent='Na pewno usunąć?'; return; }
+  state.entries = state.entries.filter(x=>x.id!==editingId);
+  this.dataset.sure=''; this.textContent='Usuń wpis';
+  closeAddView();
+  render();
+  saveState();
+});
+
+document.getElementById('chartSeg').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-mode]');
+  if(!btn) return;
+  chartMode = btn.dataset.mode;
+  [...document.getElementById('chartSeg').children].forEach(b=>b.classList.toggle('active', b===btn));
+  renderChart();
+});
+
+/* ====================== PULA STARTOWA ====================== */
+function openPoolEdit(){
+  document.getElementById('poolNewVal').value = state.poolStart;
+  document.getElementById('poolEditOverlay').classList.add('open');
+}
+function closePoolEdit(){ document.getElementById('poolEditOverlay').classList.remove('open'); }
+function savePoolEdit(){
+  const v = parseFloat((document.getElementById('poolNewVal').value||'').replace(',','.'));
+  if(!(v>=0)){ showToast('Podaj poprawną kwotę', true); return; }
+  state.poolStart = v;
+  closePoolEdit();
+  render();
+  saveState();
+  showToast('Pula startowa zaktualizowana');
+}
+
+/* ====================== TOAST ====================== */
+let toastTimer;
+function showToast(msg, isErr){
+  const t = document.getElementById('toast');
+  document.getElementById('toast-text').textContent = msg;
+  t.className = 'toast show' + (isErr ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 3200);
+}
+
+/* ====================== START ====================== */
+render();
+loadRemoteOnStart();
+</script>
+</body>
+</html>
