@@ -73,6 +73,7 @@ function gotowkaPfShowVersion(v){
     margin-left:8px; flex:0 0 auto; background:var(--panel2); border:1px solid var(--line);
     color:var(--ink-dim); border-radius:20px; padding:3px 9px; font-size:.68rem; cursor:pointer;
   }
+  .userbtn{font-weight:600; color:var(--ink);}
 
   .note{
     font-size:.74rem; color:var(--ink-dim); background:var(--panel2); border:1px solid var(--line);
@@ -80,6 +81,8 @@ function gotowkaPfShowVersion(v){
   }
 
   .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:12px;}
+  .stack{display:flex; flex-direction:column; gap:14px;}
+  .stack .field{margin-bottom:0;}
   .hero .label{font-size:.7rem; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em;}
   .hero .big{font-family:var(--font-mono); font-size:2.3rem; font-weight:700; line-height:1.1; margin:4px 0 10px;}
   .track{height:8px; border-radius:99px; background:var(--panel2); overflow:hidden; margin-bottom:8px;}
@@ -161,6 +164,21 @@ function gotowkaPfShowVersion(v){
   .toast .tdot{width:7px;height:7px;border-radius:50%;background:var(--green); flex:0 0 auto;}
   .toast.err .tdot{background:var(--red);}
 
+  .msg{border-radius:8px; padding:10px 12px; font-size:.8rem;}
+  .msg.ok{background:rgba(76,175,125,.12); color:var(--green); border:1px solid rgba(76,175,125,.3);}
+  .msg.err{background:rgba(217,105,95,.12); color:var(--red); border:1px solid rgba(217,105,95,.3);}
+  .msg.warn{background:rgba(232,163,61,.12); color:var(--amber); border:1px solid rgba(232,163,61,.3);}
+  .chip{font-size:.66rem; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--panel2); color:var(--ink-dim); border:1px solid var(--line); white-space:nowrap;}
+  .chip.ok{color:var(--green); border-color:rgba(76,175,125,.3);}
+  .chip.err{color:var(--red); border-color:rgba(217,105,95,.3);}
+  .chip.warn{color:var(--amber); border-color:rgba(232,163,61,.3);}
+  .busy{display:flex; align-items:center; gap:10px;}
+  .spin{width:18px; height:18px; border:2px solid var(--line); border-top-color:var(--amber); border-radius:50%; animation:spin .7s linear infinite; flex:none;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .menu{position:fixed; top:54px; right:14px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:6px; z-index:20; display:flex; flex-direction:column; min-width:170px; box-shadow:0 8px 24px rgba(0,0,0,.4);}
+  .menu button{background:none; border:none; color:var(--ink); text-align:left; padding:10px 12px; font-size:.85rem; border-radius:6px; cursor:pointer; font-family:inherit;}
+  .menu button:active{background:var(--panel2);}
+
   [hidden]{display:none!important;}
 </style>
 </head>
@@ -171,12 +189,23 @@ function gotowkaPfShowVersion(v){
     <span class="name">💵 Gotówka PF</span>
     <span class="sub">RA-STER · pula gotówki</span>
     <span class="sync local" id="syncIndicator"><span class="dot"></span><span id="syncText">lokalnie</span></span>
-    <button class="pin-btn" onclick="location.href='https://heatcoolfulawkawro-ui.github.io/'" title="Rozdzielacz">🏠</button>
-    <button class="pin-btn" onclick="openPinChangeSheet()" title="Zmień PIN">🔒 PIN</button>
+    <button class="pin-btn" id="btnHub" title="Rozdzielacz" hidden>🏠</button>
+    <button class="pin-btn userbtn" id="userBtn" hidden></button>
   </div>
   <div class="page-version" id="pageVersion" onclick="location.replace(location.pathname + '?v=' + Date.now())" title="Stuknij, żeby wymusić pobranie najnowszej wersji">wersja strony: —</div>
 </div>
+<div class="menu" id="menu" hidden>
+  <button data-m="pin">Zmień PIN</button>
+  <button data-m="admin" id="menuAdmin" hidden>Panel admina</button>
+  <button data-m="logout">Wyloguj</button>
+</div>
 
+<main id="scrAuth" hidden></main>
+<main id="scrSetPin" hidden></main>
+<main id="scrChangePin" hidden></main>
+<main id="scrAdmin" hidden></main>
+
+<div id="appShell" hidden>
 <div id="viewMain">
   <div class="card hero">
     <div class="label">Zostało</div>
@@ -239,6 +268,7 @@ function gotowkaPfShowVersion(v){
   <button class="savebtn" id="btnSave">Zapisz</button>
   <button class="delbtn" id="btnDelete" hidden>Usuń wpis</button>
 </div>
+</div>
 
 <div class="overlay" id="poolEditOverlay">
   <div class="sheet">
@@ -253,146 +283,320 @@ function gotowkaPfShowVersion(v){
 
 <div class="toast" id="toast"><span class="tdot"></span><span id="toast-text"></span></div>
 
-<div class="overlay" id="pinGateOverlay" style="align-items:center;">
-  <div class="sheet" style="border-radius:16px; max-width:320px;">
-    <h3>🔒 Wpisz PIN</h3>
-    <div class="field"><input id="pinGateInput" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN"></div>
-    <div class="field-error" id="pinGateError">Błędny PIN — spróbuj ponownie.</div>
-    <div class="sheet-actions">
-      <button class="btn-save" id="pinGateBtn" style="flex:1" onclick="submitPinGate()">Odblokuj</button>
-    </div>
-    <div style="text-align:center; margin-top:12px;">
-      <a href="#" onclick="openPinChangeFromGate(); return false;" style="color:var(--ink-dim); font-size:.78rem;">Zapomniałeś PIN-u? Zresetuj przez e-mail</a>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="pinChangeOverlay">
-  <div class="sheet">
-    <h3>Zmień PIN</h3>
-    <div id="pinChangeStep1">
-      <p style="font-size:.82rem; color:var(--ink-dim); margin:0 0 14px;">Wyślemy jednorazowy kod na Twój e-mail.</p>
-      <div class="sheet-actions">
-        <button class="btn-cancel" onclick="cancelPinChangeSheet()">Anuluj</button>
-        <button class="btn-save" onclick="requestPinResetCode()">Wyślij kod</button>
-      </div>
-    </div>
-    <div id="pinChangeStep2" style="display:none;">
-      <div class="field"><label>Kod z e-maila</label><input id="pinResetCode" type="text" inputmode="numeric" placeholder="6 cyfr"></div>
-      <div class="field"><label>Nowy PIN</label><input id="pinResetNew" type="password" inputmode="numeric" placeholder="np. 10 cyfr"></div>
-      <div class="field-error" id="pinChangeError"></div>
-      <div class="sheet-actions">
-        <button class="btn-cancel" onclick="cancelPinChangeSheet()">Anuluj</button>
-        <button class="btn-save" onclick="confirmPinResetCode()">Zmień</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <script>
 /* ====================== KONFIGURACJA ====================== */
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbxa7mnwnG-iuFvYKqx4-callLWoLGwXzEHk4p3WnU9TdJ7_agcLWNYafWN6KQmIe__g/exec';
 const STORAGE_KEY = 'gotowkaPfState';
+const LS_AUTH = 'gotowkaPfAuth_v1';
 const configured = () => GAS_URL.indexOf('__DEPLOYMENT_ID__') < 0;
 
-/* ====================== PIN ====================== */
-const PIN_STORAGE_KEY = 'gotowkaPfPin';
-const AUTH_FAIL_TEXT = '__BRAK_AUTORYZACJI__';
-function getPin(){ return localStorage.getItem(PIN_STORAGE_KEY) || ''; }
-function setPin(p){ localStorage.setItem(PIN_STORAGE_KEY, p); }
-function clearPin(){ localStorage.removeItem(PIN_STORAGE_KEY); }
-function showPinGate(){ document.getElementById('pinGateOverlay').classList.add('open'); document.getElementById('pinGateInput').focus(); }
-function hidePinGate(){ document.getElementById('pinGateOverlay').classList.remove('open'); }
+/* ====================== POMOCNICZE ====================== */
+function lsGet(k, def) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch (e) { return def; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+function escHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const esc = escHtml;
+function msgHtml(kind, text) { return `<div class="msg ${kind}">${text}</div>`; }
 
-async function submitPinGate(){
-  const pinVal = document.getElementById('pinGateInput').value.trim();
-  if(!pinVal) return;
-  const errEl = document.getElementById('pinGateError');
-  errEl.classList.remove('show');
-  const btn = document.getElementById('pinGateBtn');
-  if(btn.disabled) return; // już trwa sprawdzanie — ignoruj drugie kliknięcie
-  btn.disabled = true;
-  const origText = btn.textContent;
-  btn.textContent = 'Sprawdzam…';
-  try{
-    const res = await fetch(GAS_URL + '?key=' + encodeURIComponent(STORAGE_KEY) + '&pin=' + encodeURIComponent(pinVal));
-    const text = await res.text();
-    if(text === AUTH_FAIL_TEXT){ errEl.classList.add('show'); return; }
-    setPin(pinVal);
-    hidePinGate();
-    applyRemoteState(text);
-  }catch(e){
-    // Offline — nie da się zweryfikować PIN-u teraz, ale nie ma sensu
-    // trzymać kogoś w terenie bez zasięgu z dala od własnych, lokalnie
-    // już zapisanych danych.
-    setPin(pinVal);
-    hidePinGate();
-  }finally{
-    btn.disabled = false;
-    btn.textContent = origText;
+/* ====================== KONTA / SESJA ====================== */
+let auth = lsGet(LS_AUTH, null); // {token, user, expires}
+
+async function api(action, payload) {
+  if (!configured()) throw new Error('offline');
+  const body = Object.assign({ action }, payload || {});
+  if (auth && auth.token && !body.token) body.token = auth.token;
+  const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+  const text = await res.text();
+  let out;
+  try { out = JSON.parse(text); } catch (e) { throw new Error('offline'); }
+  if (out && out.error === 'auth' && auth && action !== 'login') { logoutLocal(); showAuth('Sesja wygasła — zaloguj się ponownie.'); }
+  return out;
+}
+
+function logoutLocal() { auth = null; lsDel(LS_AUTH); renderUserBtn(); }
+function setAuth(out) { auth = { token: out.token, user: out.user, expires: out.expires }; lsSet(LS_AUTH, auth); renderUserBtn(); }
+
+function renderUserBtn() {
+  const b = document.getElementById('userBtn');
+  b.hidden = !auth;
+  if (auth) b.textContent = auth.user.name + ' ▾';
+  document.getElementById('menuAdmin').hidden = !(auth && auth.user.role === 'admin');
+  const hub = document.getElementById('btnHub');
+  hub.hidden = !auth;
+  hub.onclick = () => { location.href = auth && auth.user.id === 'PF' ? 'https://heatcoolfulawkawro-ui.github.io/' : 'https://heatcoolfulawkawro-ui.github.io/zuzia/'; };
+}
+
+function showScreen(id) {
+  ['scrAuth', 'scrSetPin', 'appShell', 'scrChangePin', 'scrAdmin'].forEach(s => document.getElementById(s).hidden = s !== id);
+  document.getElementById('menu').hidden = true;
+  window.scrollTo(0, 0);
+}
+
+async function showAuth(note) {
+  showScreen('scrAuth');
+  const el = document.getElementById('scrAuth');
+  if (!configured()) {
+    el.innerHTML = `<div class="card stack"><h2>Gotówka PF</h2>${msgHtml('warn', 'Appka nie jest jeszcze podłączona do Arkusza.')}</div>`;
+    return;
   }
+  el.innerHTML = `<div class="card stack"><div class="busy"><div class="spin"></div><span style="color:var(--ink-dim)">Łączę z Arkuszem…</span></div></div>`;
+  let st = null;
+  try { st = await api('status'); } catch (e) {}
+  if (st && st.ok && st.setup) return showBootstrap();
+  el.innerHTML = `<form class="card stack" id="loginForm" autocomplete="on">
+    <h2>Zaloguj się</h2>
+    ${note ? msgHtml('warn', esc(note)) : ''}
+    ${!st ? msgHtml('err', 'Brak połączenia z Arkuszem. Sprawdź internet.') : ''}
+    <label class="field"><label>Login (skrót, np. PF)</label><input id="lgUser" autocapitalize="characters" autocomplete="username" maxlength="6"></label>
+    <label class="field"><label>PIN</label><input id="lgPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="current-password"></label>
+    <div id="lgMsg"></div>
+    <button class="savebtn" type="submit" id="lgBtn">Zaloguj</button>
+    <button type="button" id="lgForgot" style="background:none;border:none;color:var(--ink-dim);font-size:.78rem;padding:10px;width:100%;cursor:pointer;">Nie pamiętam PIN-u / pierwsze logowanie</button>
+  </form>`;
+  document.getElementById('loginForm').onsubmit = async e => {
+    e.preventDefault();
+    const user = document.getElementById('lgUser').value.trim().toUpperCase(), pin = document.getElementById('lgPin').value.trim();
+    const box = document.getElementById('lgMsg');
+    if (!/^[A-Z]{1,6}$/.test(user) || !/^\d{4,10}$/.test(pin)) { box.innerHTML = msgHtml('err', 'Login to 1–6 liter, PIN to 4-10 cyfr.'); return; }
+    box.innerHTML = '';
+    const btn = document.getElementById('lgBtn');
+    if (btn.disabled) return; // już trwa logowanie — ignoruj drugie kliknięcie
+    btn.disabled = true;
+    const origText = btn.textContent;
+    btn.textContent = 'Loguję…';
+    try {
+      const out = await api('login', { user, pin });
+      if (out.ok) { setAuth(out); return startMain(); }
+      box.innerHTML = msgHtml('err', out.error === 'locked' ? `Za dużo błędnych prób. Spróbuj za ${Math.ceil((out.retryMs || 0) / 60000)} min albo poproś admina o odblokowanie.` : 'Zły login albo PIN.');
+    } catch (err) { box.innerHTML = msgHtml('err', 'Brak połączenia z Arkuszem.'); }
+    finally { btn.disabled = false; btn.textContent = origText; }
+  };
+  document.getElementById('lgForgot').onclick = async () => {
+    const user = document.getElementById('lgUser').value.trim().toUpperCase();
+    const box = document.getElementById('lgMsg');
+    if (!/^[A-Z]{1,6}$/.test(user)) { box.innerHTML = msgHtml('err', 'Wpisz najpierw swój login (skrót).'); return; }
+    try {
+      await api('requestLink', { user });
+      box.innerHTML = msgHtml('ok', 'Jeśli to konto ma zapisany e-mail, właśnie wysłałem link do ustawienia PIN-u. Sprawdź pocztę (także spam).');
+    } catch (err) { box.innerHTML = msgHtml('err', 'Brak połączenia z Arkuszem.'); }
+  };
 }
 
-function applyRemoteState(text){
-  if(!text) return;
-  try{
-    const remote = JSON.parse(text);
-    if(remote && typeof remote.poolStart === 'number' && Array.isArray(remote.entries)){
-      state = remote;
-      setSyncStatus('ok');
-      render();
+function showBootstrap() {
+  const el = document.getElementById('scrAuth');
+  el.innerHTML = `<form class="card stack" id="bsForm">
+    <h2>Pierwsze uruchomienie</h2>
+    <div style="color:var(--ink-dim); font-size:.82rem;">Zakładasz konto administratora. Link do ustawienia PIN-u przyjdzie na e-mail właściciela Arkusza.</div>
+    <label class="field"><label>Login (skrót, 1–6 liter)</label><input id="bsId" autocapitalize="characters" maxlength="6" value="PF"></label>
+    <label class="field"><label>Imię</label><input id="bsName" maxlength="40" value="Paweł"></label>
+    <div id="bsMsg"></div>
+    <button class="savebtn" type="submit">Załóż konto admina</button>
+  </form>`;
+  document.getElementById('bsForm').onsubmit = async e => {
+    e.preventDefault();
+    const id = document.getElementById('bsId').value.trim().toUpperCase(), name = document.getElementById('bsName').value.trim();
+    const box = document.getElementById('bsMsg');
+    if (!/^[A-Z]{1,6}$/.test(id) || !name) { box.innerHTML = msgHtml('err', 'Uzupełnij login (litery) i imię.'); return; }
+    try {
+      const out = await api('bootstrap', { id, name });
+      box.innerHTML = out.ok ? msgHtml('ok', `Gotowe. Link do ustawienia PIN-u wysłany na ${esc(out.sentTo)}. Otwórz go na tym telefonie.`)
+        : msgHtml('err', out.error === 'exists' ? 'Konto admina już istnieje — odśwież stronę i zaloguj się.' : 'Nie udało się (' + esc(out.error) + ').');
+    } catch (err) { box.innerHTML = msgHtml('err', 'Brak połączenia z Arkuszem.'); }
+  };
+}
+
+// Ekran z linku z maila: ?pin=TOKEN
+async function showSetPin(link) {
+  showScreen('scrSetPin');
+  const el = document.getElementById('scrSetPin');
+  el.innerHTML = `<div class="card stack"><div class="busy"><div class="spin"></div><span style="color:var(--ink-dim)">Sprawdzam link…</span></div></div>`;
+  let chk = null;
+  try { chk = await api('checkLink', { link }); } catch (e) {}
+  const clearUrl = () => history.replaceState(null, '', location.pathname);
+  if (!chk || !chk.ok) {
+    el.innerHTML = `<div class="card stack"><h2>Link nie działa</h2>${msgHtml('err', chk ? 'Link wygasł albo został już użyty. Poproś o nowy: na ekranie logowania „Nie pamiętam PIN-u".' : 'Brak połączenia z Arkuszem.')}<button class="savebtn" id="spBack">Przejdź do logowania</button></div>`;
+    document.getElementById('spBack').onclick = () => { clearUrl(); showAuth(); };
+    return;
+  }
+  el.innerHTML = `<form class="card stack" id="spForm">
+    <h2>${chk.purpose === 'invite' ? 'Witaj' : 'Nowy PIN'}, ${esc(chk.user.name)}</h2>
+    <div style="color:var(--ink-dim); font-size:.82rem;">Twój login: <b>${esc(chk.user.id)}</b>. Ustaw PIN (4-10 cyfr) — będziesz go wpisywać przy logowaniu.</div>
+    <label class="field"><label>Nowy PIN</label><input id="spPin1" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="new-password"></label>
+    <label class="field"><label>Powtórz PIN</label><input id="spPin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="new-password"></label>
+    <div id="spMsg"></div>
+    <button class="savebtn" type="submit">Ustaw PIN i wejdź</button>
+  </form>`;
+  document.getElementById('spForm').onsubmit = async e => {
+    e.preventDefault();
+    const p1 = document.getElementById('spPin1').value.trim(), p2 = document.getElementById('spPin2').value.trim(), box = document.getElementById('spMsg');
+    if (!/^\d{4,10}$/.test(p1)) { box.innerHTML = msgHtml('err', 'PIN to 4-10 cyfr.'); return; }
+    if (p1 !== p2) { box.innerHTML = msgHtml('err', 'PIN-y się różnią.'); return; }
+    try {
+      const out = await api('setPinByLink', { link, pin: p1 });
+      if (!out.ok) { box.innerHTML = msgHtml('err', out.error === 'link' ? 'Link wygasł albo został już użyty.' : 'Nie udało się.'); return; }
+      clearUrl();
+      setAuth(out);
+      showToast('PIN ustawiony');
+      startMain();
+    } catch (err) { box.innerHTML = msgHtml('err', 'Brak połączenia z Arkuszem.'); }
+  };
+}
+
+function showChangePin() {
+  if (auth.user.id === 'PF') return showChangePinLegacy();
+  showScreen('scrChangePin');
+  const el = document.getElementById('scrChangePin');
+  el.innerHTML = `<div class="pagehead"><button class="backbtn" id="cpBack">‹ Wróć</button><h2>Zmień PIN</h2></div>
+  <form class="card stack" id="cpForm">
+    <label class="field"><label>Obecny PIN</label><input id="cpOld" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="current-password"></label>
+    <label class="field"><label>Nowy PIN (4-10 cyfr)</label><input id="cpNew1" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="new-password"></label>
+    <label class="field"><label>Powtórz nowy PIN</label><input id="cpNew2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="new-password"></label>
+    <div id="cpMsg"></div>
+    <button class="savebtn" type="submit">Zmień PIN</button>
+    <div style="color:var(--ink-dim); font-size:.76rem;">Nie pamiętasz obecnego? Wyloguj się i na ekranie logowania wybierz „Nie pamiętam PIN-u" — link przyjdzie na e-mail.</div>
+  </form>`;
+  document.getElementById('cpBack').onclick = () => startMain();
+  document.getElementById('cpForm').onsubmit = async e => {
+    e.preventDefault();
+    const o = document.getElementById('cpOld').value.trim(), n1 = document.getElementById('cpNew1').value.trim(), n2 = document.getElementById('cpNew2').value.trim(), box = document.getElementById('cpMsg');
+    if (!/^\d{4,10}$/.test(o) || !/^\d{4,10}$/.test(n1)) { box.innerHTML = msgHtml('err', 'PIN to 4-10 cyfr.'); return; }
+    if (n1 !== n2) { box.innerHTML = msgHtml('err', 'Nowe PIN-y się różnią.'); return; }
+    try {
+      const out = await api('changePin', { oldPin: o, newPin: n1 });
+      if (!out.ok) { box.innerHTML = msgHtml('err', 'Zły obecny PIN.'); return; }
+      setAuth(out);
+      showToast('PIN zmieniony');
+      startMain();
+    } catch (err) { box.innerHTML = msgHtml('err', 'Brak połączenia z Arkuszem.'); }
+  };
+}
+
+// Konto PF: dla bezpieczeństwa zmiana idzie przez kod z maila + potwierdzenie
+// klikiem w osobny link (patrz Kod.gs: requestPinResetLegacy_/confirmPinResetLegacy_) —
+// zamiast starego PIN-u, żeby sama aktywna sesja nie wystarczała do przejęcia PIN-u.
+function showChangePinLegacy() {
+  showScreen('scrChangePin');
+  const el = document.getElementById('scrChangePin');
+  el.innerHTML = `<div class="pagehead"><button class="backbtn" id="cpBack">‹ Wróć</button><h2>Zmień PIN</h2></div>
+  <div class="card stack">
+    <div id="cpLegacyMsg" style="color:var(--ink-dim); font-size:.8rem;">Wysyłam kod na Twój e-mail…</div>
+    <div id="cpLegacyBox" hidden>
+      <label class="field"><label>Kod z e-maila</label><input id="cpCode" inputmode="numeric" pattern="[0-9]*" maxlength="6"></label>
+      <label class="field"><label>Nowy PIN (4-10 cyfr)</label><input id="cpNewLegacy" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="new-password"></label>
+      <div id="cpMsg"></div>
+      <button class="savebtn" id="cpLegacySave">Zapisz PIN</button>
+    </div>
+  </div>`;
+  document.getElementById('cpBack').onclick = () => startMain();
+  (async () => {
+    try {
+      const out = await api('requestPinReset', {});
+      if (out && out.ok) {
+        document.getElementById('cpLegacyMsg').textContent = 'Kod wysłany na e-mail. Wpisz go razem z nowym PIN-em — potem przyjdzie jeszcze link do potwierdzenia.';
+        document.getElementById('cpLegacyBox').hidden = false;
+      } else {
+        document.getElementById('cpLegacyMsg').textContent = (out && out.error) || 'Nie udało się wysłać kodu — spróbuj ponownie później.';
+      }
+    } catch (e) { document.getElementById('cpLegacyMsg').textContent = 'Brak połączenia z Arkuszem.'; }
+  })();
+  document.getElementById('cpLegacySave').onclick = async () => {
+    const code = document.getElementById('cpCode').value.trim(), n1 = document.getElementById('cpNewLegacy').value.trim(), box = document.getElementById('cpMsg');
+    if (!/^\d{6}$/.test(code)) { box.innerHTML = msgHtml('err', 'Podaj 6-cyfrowy kod z maila.'); return; }
+    if (!/^\d{4,10}$/.test(n1)) { box.innerHTML = msgHtml('err', 'PIN to 4-10 cyfr.'); return; }
+    try {
+      const out = await api('confirmPinReset', { code, newPin: n1 });
+      if (!out.ok) { box.innerHTML = msgHtml('err', out.error || 'Błąd.'); return; }
+      showToast('Sprawdź maila i kliknij link, żeby dokończyć zmianę PIN-u');
+      startMain();
+    } catch (err) { box.innerHTML = msgHtml('err', 'Brak połączenia z Arkuszem.'); }
+  };
+}
+
+/* ====================== PANEL ADMINA ====================== */
+async function showAdmin(note) {
+  showScreen('scrAdmin');
+  const el = document.getElementById('scrAdmin');
+  el.innerHTML = `<div class="pagehead"><button class="backbtn" id="adBack">‹ Wróć</button><h2>Panel admina</h2></div><div class="card busy"><div class="spin"></div><span style="color:var(--ink-dim)">Wczytuję…</span></div>`;
+  document.getElementById('adBack').onclick = () => startMain();
+  let out = null;
+  try { out = await api('admin.list'); } catch (e) {}
+  if (!out || !out.ok) { el.insertAdjacentHTML('beforeend', msgHtml('err', 'Nie udało się wczytać kont.')); return; }
+  renderAdmin(out.users, note);
+}
+
+function renderAdmin(users, note) {
+  const el = document.getElementById('scrAdmin');
+  const status = u => !u.active ? '<span class="chip">wyłączone</span>' : u.locked ? '<span class="chip err">zablokowane</span>' : u.hasPin ? '<span class="chip ok">PIN ustawiony</span>' : '<span class="chip warn">czeka na PIN z maila</span>';
+  const me = auth.user.id;
+  el.innerHTML = `<div class="pagehead"><button class="backbtn" id="adBack">‹ Wróć</button><h2>Panel admina</h2></div>
+    ${note ? note : ''}
+    <div class="card stack"><p style="font-weight:700">Konta</p>
+      ${users.map(u => `<div class="stack" style="border-bottom:1px solid var(--line);padding-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span><b>${esc(u.name)}</b> <span style="color:var(--ink-dim)">(${esc(u.id)}${u.role === 'admin' ? ', admin' : ''})</span></span>${status(u)}</div>
+        <div style="color:var(--ink-dim);font-size:.78rem">${esc(u.email || 'brak e-maila')}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${u.active && u.email ? `<button class="backbtn" style="font-size:.78rem;padding:7px 10px" data-ad="sendLink" data-id="${esc(u.id)}">✉ ${u.hasPin ? 'Wyślij link do nowego PIN-u' : 'Wyślij zaproszenie ponownie'}</button>` : ''}
+          ${u.locked ? `<button class="backbtn" style="font-size:.78rem;padding:7px 10px" data-ad="unlock" data-id="${esc(u.id)}">Odblokuj</button>` : ''}
+          <button class="backbtn" style="font-size:.78rem;padding:7px 10px" data-ad="email" data-id="${esc(u.id)}">Zmień e-mail</button>
+          ${u.id !== me ? `<button class="backbtn" style="font-size:.78rem;padding:7px 10px;${u.active ? 'color:var(--red)' : ''}" data-ad="active" data-id="${esc(u.id)}" data-v="${u.active ? '0' : '1'}">${u.active ? 'Wyłącz' : 'Włącz'}</button>` : ''}
+        </div>
+        <div data-emailbox="${esc(u.id)}" hidden style="display:flex;gap:8px"><input style="flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:10px;font-size:14px" type="email" placeholder="nowy e-mail" value="${esc(u.email)}"><button class="backbtn" data-ad="saveEmail" data-id="${esc(u.id)}">Zapisz</button></div>
+      </div>`).join('')}
+      <p style="font-weight:700;margin-top:6px">Dodaj osobę</p>
+      <div style="display:flex;gap:10px">
+        <label class="field" style="flex:1"><label>Login (skrót)</label><input id="nuId" autocapitalize="characters" maxlength="6"></label>
+        <label class="field" style="flex:1"><label>Imię</label><input id="nuName" maxlength="40"></label>
+      </div>
+      <label class="field"><label>E-mail (tu przyjdzie link do ustawienia PIN-u)</label><input id="nuEmail" type="email" autocapitalize="off"></label>
+      <button class="savebtn" data-ad="create">Dodaj i wyślij zaproszenie</button>
+    </div>`;
+  document.getElementById('adBack').onclick = () => startMain();
+  el.onclick = e => adminClick(e, users);
+}
+
+async function adminClick(e, users) {
+  const t = e.target.closest('[data-ad]');
+  if (!t) return;
+  const a = t.dataset.ad, id = t.dataset.id;
+  const done = (out, okText) => {
+    if (out && out.ok) {
+      const warn = out.sent === false ? msgHtml('err', 'Konto zapisane, ale mail się nie wysłał (limit Google albo zły adres). Spróbuj „Wyślij" później.') : msgHtml('ok', okText);
+      if (out.users) renderAdmin(out.users, warn); else showAdmin(warn);
+    } else {
+      const why = { exists: 'taki login już jest', bad: 'sprawdź dane' }[out && out.error] || 'brak połączenia';
+      document.getElementById('scrAdmin').insertAdjacentHTML('afterbegin', msgHtml('err', 'Nie udało się: ' + why + '.'));
+      window.scrollTo(0, 0);
     }
-  }catch(e){ /* nieprawidłowa odpowiedź — zostajemy przy danych lokalnych */ }
+  };
+  try {
+    if (a === 'sendLink') done(await api('admin.sendLink', { id }), 'Wysłano link na e-mail.');
+    else if (a === 'unlock') done(await api('admin.unlock', { id }), 'Odblokowano.');
+    else if (a === 'active') done(await api('admin.setActive', { id, active: t.dataset.v === '1' }), t.dataset.v === '1' ? 'Konto włączone.' : 'Konto wyłączone (dane zostają).');
+    else if (a === 'email') { const b = document.getElementById('scrAdmin').querySelector(`[data-emailbox="${id}"]`); b.hidden = !b.hidden; }
+    else if (a === 'saveEmail') { const v = document.getElementById('scrAdmin').querySelector(`[data-emailbox="${id}"] input`).value.trim(); done(await api('admin.setEmail', { id, email: v }), 'E-mail zmieniony.'); }
+    else if (a === 'create') {
+      const nid = document.getElementById('nuId').value.trim().toUpperCase(), name = document.getElementById('nuName').value.trim(), email = document.getElementById('nuEmail').value.trim();
+      if (!/^[A-Z]{1,6}$/.test(nid) || !name || !/@/.test(email)) { document.getElementById('scrAdmin').insertAdjacentHTML('afterbegin', msgHtml('err', 'Uzupełnij login (1–6 liter), imię i e-mail.')); window.scrollTo(0, 0); return; }
+      done(await api('admin.createUser', { id: nid, name, email }), `Dodano ${esc(name)}. Zaproszenie z linkiem do ustawienia PIN-u poszło na ${esc(email)}.`);
+    }
+  } catch (err) { document.getElementById('scrAdmin').insertAdjacentHTML('afterbegin', msgHtml('err', 'Brak połączenia z Arkuszem.')); window.scrollTo(0, 0); }
 }
 
-let pinChangeFromGate = false;
-function openPinChangeSheet(){
-  pinChangeFromGate = false;
-  document.getElementById('pinChangeStep1').style.display='';
-  document.getElementById('pinChangeStep2').style.display='none';
-  document.getElementById('pinChangeError').classList.remove('show');
-  document.getElementById('pinResetCode').value='';
-  document.getElementById('pinResetNew').value='';
-  document.getElementById('pinChangeOverlay').classList.add('open');
-}
-function openPinChangeFromGate(){ hidePinGate(); openPinChangeSheet(); pinChangeFromGate = true; }
-function closePinChangeSheet(){ document.getElementById('pinChangeOverlay').classList.remove('open'); }
-function cancelPinChangeSheet(){
-  closePinChangeSheet();
-  if(pinChangeFromGate){ pinChangeFromGate = false; showPinGate(); }
-}
+document.getElementById('userBtn').onclick = e => { e.stopPropagation(); document.getElementById('menu').hidden = !document.getElementById('menu').hidden; };
+document.addEventListener('click', e => { if (!e.target.closest('#menu') && e.target.id !== 'userBtn') document.getElementById('menu').hidden = true; });
+document.getElementById('menu').onclick = async e => {
+  const m = e.target.closest('[data-m]'); if (!m) return;
+  document.getElementById('menu').hidden = true;
+  if (m.dataset.m === 'pin') showChangePin();
+  else if (m.dataset.m === 'admin') showAdmin();
+  else if (m.dataset.m === 'logout') {
+    try { await api('logout'); } catch (err) {}
+    logoutLocal();
+    showAuth();
+  }
+};
 
-async function requestPinResetCode(){
-  if(!configured()){ showToast('Backend jeszcze niepodłączony', true); return; }
-  try{
-    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'request_pin_reset' }) });
-    const data = await res.json();
-    if(!data.ok){ showToast(data.error || 'Nie udało się wysłać kodu', true); return; }
-    document.getElementById('pinChangeStep1').style.display='none';
-    document.getElementById('pinChangeStep2').style.display='';
-    showToast('Kod wysłany na e-mail');
-  }catch(e){ showToast('Brak połączenia', true); }
-}
-
-async function confirmPinResetCode(){
-  const code = document.getElementById('pinResetCode').value.trim();
-  const newPin = document.getElementById('pinResetNew').value.trim();
-  const errEl = document.getElementById('pinChangeError');
-  errEl.classList.remove('show');
-  if(!code || !newPin){ errEl.textContent='Wpisz kod i nowy PIN.'; errEl.classList.add('show'); return; }
-  try{
-    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'confirm_pin_reset', code, newPin }) });
-    const data = await res.json();
-    if(!data.ok){ errEl.textContent = data.error || 'Błąd'; errEl.classList.add('show'); return; }
-    closePinChangeSheet();
-    const wasFromGate = pinChangeFromGate;
-    pinChangeFromGate = false;
-    showToast('Sprawdź maila i kliknij link, żeby dokończyć zmianę PIN-u');
-    if(wasFromGate) showPinGate();
-  }catch(e){ errEl.textContent='Brak połączenia'; errEl.classList.add('show'); }
-}
-
-/* ====================== STAN / DANE ====================== */
+/* ====================== STAN / DANE (pula i wpisy — wspólne dla PF i ZF) ====================== */
 function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2)); }
 
 function seedState(){
@@ -420,22 +624,10 @@ function setSyncStatus(kind){
 }
 
 async function syncRemote(){
-  if(!configured()) return;
+  if(!configured() || !auth) return;
   try{
-    const res = await fetch(GAS_URL, {
-      method: 'POST', headers: {'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ key: STORAGE_KEY, value: JSON.stringify(state), pin: getPin() })
-    });
-    const data = await res.json().catch(()=>null);
-    if(data && data.ok === false){
-      // PIN zmieniony gdzie indziej (np. przez sync z innej appki PF) — dane
-      // zostają bezpieczne lokalnie, ale trzeba wpisać PIN ponownie.
-      clearPin();
-      setSyncStatus('err');
-      showPinGate();
-      return;
-    }
-    if(res.ok) setSyncStatus('ok'); else setSyncStatus('err');
+    const out = await api('set', { key: STORAGE_KEY, value: JSON.stringify(state) });
+    setSyncStatus(out && out.ok ? 'ok' : 'err');
   }catch(e){ setSyncStatus('err'); }
 }
 
@@ -443,17 +635,35 @@ async function syncRemote(){
 window.addEventListener('online', syncRemote);
 
 async function loadRemoteOnStart(){
-  if(!configured()) return;
-  if(!getPin()){ showPinGate(); return; }
+  if(!configured() || !auth) return;
   try{
-    const res = await fetch(GAS_URL + '?key=' + encodeURIComponent(STORAGE_KEY) + '&pin=' + encodeURIComponent(getPin()));
-    const text = await res.text();
-    if(text === AUTH_FAIL_TEXT){ clearPin(); showPinGate(); return; }
-    // Sam dotarliśmy do serwera z dobrym PIN-em — to już sukces, nawet gdy
+    const out = await api('get', { key: STORAGE_KEY });
+    if(!out || !out.ok){ setSyncStatus('local'); return; }
+    // Sam dotarliśmy do serwera z ważną sesją — to już sukces, nawet gdy
     // odpowiedź jest pusta (pierwszy raz, jeszcze bez zapisanych danych).
     setSyncStatus('ok');
-    applyRemoteState(text);
+    applyRemoteState(out.value);
   }catch(e){ setSyncStatus('local'); /* offline — zostajemy przy danych lokalnych */ }
+}
+
+function applyRemoteState(text){
+  if(!text) return;
+  try{
+    const remote = JSON.parse(text);
+    if(remote && typeof remote.poolStart === 'number' && Array.isArray(remote.entries)){
+      state = remote;
+      render();
+    }
+  }catch(e){ /* nieprawidłowa odpowiedź — zostajemy przy danych lokalnych */ }
+}
+
+/* ====================== START PO ZALOGOWANIU ====================== */
+function startMain() {
+  showScreen('appShell');
+  renderUserBtn();
+  render();
+  loadRemoteOnStart();
+  api('me').then(out => { if (out && out.ok) { auth.user = out.user; lsSet(LS_AUTH, auth); renderUserBtn(); } }).catch(() => {});
 }
 
 /* ====================== POMOCNICZE / DATY ====================== */
@@ -583,7 +793,6 @@ function renderList(){
       <div class="amt ${e.type}">${e.type==='minus'?'−':'+'}${zl(e.amount)}</div>
     </div>`).join('');
 }
-function escHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ====================== DODAWANIE / EDYCJA WPISU ====================== */
 let editingId = null;
@@ -642,7 +851,12 @@ function currentWho(){
   const btn = document.getElementById('whoSeg').querySelector('.active');
   return btn ? btn.dataset.who : 'PF';
 }
-function lastWho(){ try{ return localStorage.getItem('gotowkaPfLastWho') || 'PF'; }catch(e){ return 'PF'; } }
+// Domyślny wybór dla nowego wpisu: kto jest zalogowany (jeśli to PF albo ZF),
+// inaczej ostatni ręczny wybór na tym urządzeniu — zawsze można zmienić ręcznie.
+function lastWho(){
+  if (auth && auth.user && (auth.user.id === 'PF' || auth.user.id === 'ZF')) return auth.user.id;
+  try{ return localStorage.getItem('gotowkaPfLastWho') || 'PF'; }catch(e){ return 'PF'; }
+}
 document.getElementById('whoSeg').addEventListener('click', e=>{
   const btn = e.target.closest('button[data-who]');
   if(!btn) return;
@@ -738,8 +952,12 @@ function showToast(msg, isErr){
 }
 
 /* ====================== START ====================== */
-render();
-loadRemoteOnStart();
+(function start() {
+  const link = new URLSearchParams(location.search).get('pin');
+  if (link) return showSetPin(link);
+  if (auth && auth.token && (!auth.expires || auth.expires > Date.now())) return startMain();
+  showAuth();
+})();
 </script>
 </body>
 </html>

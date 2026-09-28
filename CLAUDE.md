@@ -1,10 +1,13 @@
 # Gotówka PF — pamięć projektu
 
-Mobilna appka webowa do śledzenia puli gotówki Pawła (RA-STER) — ile zostało,
-ile wykorzystano %, i w jakim rytmie (dzień/tydzień/miesiąc) bierze kasę.
-Jedna osoba, jeden PIN (jak Paliwo-PF/Waga-PF — bez wielu kont). Z użytkownikiem
-rozmawiaj po polsku; to inżynier, nie programista — tłumacz krótko pojęcia przy
-pierwszym użyciu i rób sam wszystko, co nie wymaga jego logowania.
+Mobilna appka webowa do śledzenia puli gotówki domowej (RA-STER) — ile
+zostało, ile wykorzystano %, i w jakim rytmie (dzień/tydzień/miesiąc) bierze
+się kasę. Dwie osoby (Paweł, Zuzia), każda z własnym kontem/PIN-em (jak
+karta-godzin/wydatki-domowe), ale WSPÓLNA pula i lista wpisów — to jedna
+fizyczna gotówka, konta dają tylko osobne logowanie, nie osobne dane. Z
+użytkownikiem rozmawiaj po polsku; to inżynier, nie programista — tłumacz
+krótko pojęcia przy pierwszym użyciu i rób sam wszystko, co nie wymaga jego
+logowania.
 
 ## Gdzie co leży
 
@@ -12,9 +15,11 @@ pierwszym użyciu i rób sam wszystko, co nie wymaga jego logowania.
   bez build stepu) → GitHub Pages:
   https://heatcoolfulawkawro-ui.github.io/gotowka-pf/
 - **Backend**: `Kod.gs` + `appsscript.json` → Google Apps Script podpięty do
-  Arkusza „Gotówka PF — dane" (zakładka `Data`, kolumny `key`, `value`).
-  Magazyn klucz-wartość przez `doGet`/`doPost`, PIN sprawdzany po stronie
-  serwera (parametr `pin` / pole `pin` w body).
+  Arkusza „Gotówka PF — dane". Zakładki: `Data` (pula+wpisy, jeden wspólny
+  klucz `gotowkaPfState`, kolumny `key`/`value`), `Users`/`Sessions`/`Links`/
+  `Audit` — konta, tokeny sesji (tylko SHA-256), jednorazowe linki mailowe,
+  dziennik zmian admina. Wzorzec 1:1 z Wydatków domowych, przycięty do dwóch
+  kont — patrz sekcja „Konta" niżej.
 - **Web App URL** (stała `GAS_URL` w `index.html`) — NIE MOŻE się zmienić.
 - `.clasp.json` / `.claspignore` — konfiguracja clasp (wypychane są tylko
   `Kod.gs` i `appsscript.json`).
@@ -32,33 +37,58 @@ pierwszym użyciu i rób sam wszystko, co nie wymaga jego logowania.
   `--deploymentId` — powstałby nowy URL. Przepis i pułapki:
   `.claude/skills/gas-clasp-autodeploy/SKILL.md` (skopiowany z karty godzin).
 - Po wdrożeniu backendu sprawdź: `gh run watch`, w logu `Deployed … @N` pod
-  tym samym ID, oraz `GET <GAS_URL>?key=__ping__&pin=<PIN>` → HTTP 200.
+  tym samym ID, oraz `GET <GAS_URL>` → HTTP 200 z pustą treścią (appka nie
+  wydaje już niczego przez GET bez sesji — to sukces, nie błąd).
 - `appsscript.json` pochodzi z `clasp pull` — nie edytuj z głowy; pola
   `webapp.access`/`executeAs` sterują dostępem do appki.
 
-## PIN i wspólny kod rodziny PF
+## Konta (od 28.09.2026, v2 — było: jeden wspólny PIN)
 
-- Jeden PIN dla całej appki (`APP_PIN` w Script Properties), bez wielu kont —
-  jak Paliwo-PF/Waga-PF, NIE jak karta-godzin/wydatki-domowe.
-- Ta appka jest częścią „rodziny" jednego kodu PF razem z Paliwo-PF, Waga-PF,
-  karta-godzin (konto PF) i wydatki-domowe (konto PF): zmiana PIN-u w
-  KTÓREJKOLWIEK z nich rozsyła go do reszty (`SIBLING_URLS` + `SYNC_SECRET`
-  w Script Properties, mechanizm `sync_pin_push`/`pushPinToSiblings` w
-  `Kod.gs`). Sekret NIGDY nie trafia do repo/czatu. Dołączenie nowej appki do
-  rodziny = dopisać jej URL do `SIBLING_URLS` we wszystkich pozostałych +
-  `bootstrap_sync_secret`/`reset_sync_secret` tym samym sekretem.
-- Zapomniany PIN: „Zapomniałeś PIN-u? Zresetuj przez e-mail" dostępne wprost
-  z ekranu blokady (nie tylko po zalogowaniu) — kod na
-  heatcoolfulawkawro@gmail.com, ważny 10 minut.
-- PIN długości 4–12 cyfr (`/^\d{4,12}$/`, jak Paliwo/Waga).
+- Dwa konta: **PF** (Paweł, admin) i **ZF** (Zuzia, zwykły użytkownik).
+  Login (skrót) + PIN 4–10 cyfr, PIN-u nigdy nie zapisujemy — tylko
+  HMAC(PIN; pepper+sól) w zakładce `Users`. Sesja = token 60 dni
+  (`localStorage['gotowkaPfAuth_v1']`), zapisany po stronie serwera tylko
+  jako SHA-256 (`Sessions`). Konto zakłada admin w Panelu admina (login,
+  imię, e-mail) — właściciel konta sam ustawia PIN przez jednorazowy link
+  mailem (48 h, jednorazowy); admin NIGDY nie widzi/ustawia surowego PIN-u
+  poza swoim.
+- Dane (pula + wpisy pod `gotowkaPfState`) są WSPÓLNE dla PF i ZF — konta
+  to tylko osobne logowanie, nie osobne dane. Kto zrobił wpis, mówi
+  przełącznik „PF/ZF" w formularzu (pole `who`, patrz niżej) — domyślnie
+  ten, kto jest zalogowany, ale zawsze można zmienić ręcznie.
+- Zapomniany PIN (ZF i inni zwykli użytkownicy): „Nie pamiętam PIN-u" na
+  ekranie logowania → jednorazowy link mailem → appka sama ustawia nowy PIN
+  i loguje.
+- Konto **PF** ma dodatkowo utwardzoną ścieżkę zmiany PIN-u (dwa etapy: kod
+  z maila + osobny link do potwierdzenia klikiem — `requestPinResetLegacy_`/
+  `confirmPinResetLegacy_`/`confirmPinLink_` w `Kod.gs`), identyczną jak w
+  karta-godzin/wydatki-domowe/Paliwo-PF/Waga-PF — bo to ten sam mechanizm
+  „rodziny" PIN-u PF, patrz niżej. Zwykły jednoetapowy link (`setPinByLink_`)
+  jest dla PF zablokowany, ale TYLKO gdy PIN już istnieje — pierwsze
+  ustawienie świeżego konta (bootstrap/zaproszenie) nim może iść, bo nie ma
+  jeszcze czego chronić.
+- **Rodzina PIN-u PF — CELOWO ODŁĄCZONA od 28.09.2026** (`SIBLING_URLS = []`
+  w `Kod.gs`). Historia: appka startowo (v1.0) miała JEDEN wspólny PIN dla
+  całej appki (bez osobnych kont) i BYŁA podpięta do tej samej rodziny co
+  Paliwo-PF/Waga-PF/karta-godzin/Wydatki — efekt: gdy Zuzia zresetowała ten
+  wspólny PIN, rozjechało się to na PIN konta PF we WSZYSTKICH appkach Pawła
+  (realny incydent). Teraz appka ma dwa prawdziwe, niezależne konta — PIN
+  konta PF tutaj jest znowu osobnym sekretem, nie tym samym co PIN Pawła
+  gdzie indziej. Mechanizm sync zostaje w kodzie (na wypadek świadomej
+  decyzji, żeby jednak podpiąć PF z powrotem), ale `SIBLING_URLS` ma zostać
+  puste, dopóki ktoś świadomie tego nie zmieni.
 
 ## Zasady przy zmianach
 
 - Przed widoczną zmianą UI (nowy ekran/panel) pokaż makietę do akceptacji.
-- Po każdej zmianie JS sprawdź składnię (`node scripts/check-js.js
-  index.html` ze skilla `ra-ster-mini-app`).
-- Testuj na kopii odciętej od Arkusza (`node scripts/serve-sandbox.js
-  index.html`), nigdy na prawdziwych danych.
+- Po każdej zmianie JS sprawdź składnię (wytnij `<script>` do pliku i
+  `node --check`, albo `node scripts/check-js.js index.html` ze skilla
+  `ra-ster-mini-app`, jeśli jest).
+- Testuj na kopii odciętej od Arkusza: `node tools/sandbox.js index.html
+  Kod.gs "" <port>` odpala PRAWDZIWY Kod.gs na atrapie Arkusza w pamięci
+  (maile z linkami pod `/__mail`, appka pod `/`, `GAS_URL` podmienione na
+  `/gas`) — nigdy na prawdziwych danych. Skopiowane z Wydatków domowych,
+  generyczne dla każdej appki tej rodziny.
 - POST do Apps Script zawsze z `Content-Type: text/plain;charset=utf-8`.
 - Format danych: jeden klucz `gotowkaPfState`, JSON `{ poolStart: liczba,
   entries: [{id, date (YYYY-MM-DD), type: 'minus'|'plus', amount, note, who,
@@ -68,9 +98,9 @@ pierwszym użyciu i rób sam wszystko, co nie wymaga jego logowania.
   plakietki). Zmiana formatu = migracja, nie rób tego mimochodem.
 - `localStorage` to natychmiastowy bufor, `fetch` do Arkusza idzie w tle —
   appka ma działać offline. Status połączenia: zielona kropka = zsynchronizowano,
-  czerwona = błąd (serwer odrzucił/zły PIN), pomarańczowa = zapisano lokalnie
-  (offline). Po powrocie ONLINE appka sama wysyła zaległy stan
-  (`window.addEventListener('online', syncRemote)`).
+  czerwona = błąd (serwer odrzucił — np. sesja wygasła), pomarańczowa =
+  zapisano lokalnie (offline). Po powrocie ONLINE appka sama wysyła zaległy
+  stan (`window.addEventListener('online', syncRemote)`).
 - Przy wpisywaniu w polach nie przebudowuj DOM-u bez potrzeby (telefon gubi
   fokus).
 - Paleta i styl: ciemny motyw (te same tokeny co Paliwo/Waga/karta godzin/
@@ -81,7 +111,7 @@ pierwszym użyciu i rób sam wszystko, co nie wymaga jego logowania.
   `promo`…) — blokery reklam w przeglądarce potrafią ukryć taki element bez
   żadnego błędu w konsoli (bolesne doświadczenie z karty godzin, v1.4.2).
 
-## Funkcje (stan: 27.09.2026, v1.0 — pierwsze wdrożenie)
+## Funkcje (stan: 28.09.2026, v2 — konta PF/ZF zamiast jednego PIN-u)
 
 - Pula gotówki: „pula startowa" (edytowalna ✎, punkt wyjścia) + suma dopłat −
   suma pobrań = ile zostało. Pasek % wykorzystania względem pełnej puli
@@ -97,20 +127,34 @@ pierwszym użyciu i rób sam wszystko, co nie wymaga jego logowania.
   ostatnich miesięcy, z zerami dla pustych okresów — widać przerwy).
   Dopłaty nie wchodzą do tego wykresu/średniej (osobna, dużo rzadsza
   kategoria zdarzeń).
-- Ekran logowania PIN + „Zmień PIN" (z menu i z ekranu blokady) + reset przez
-  e-mail — pełny wzorzec z Paliwo-PF/Waga-PF.
-- 🏠 do rozdzielacza (https://heatcoolfulawkawro-ui.github.io/) w pasku
-  górnym.
+- Konta PF/ZF (patrz sekcja „Konta" wyżej): ekran logowania, pierwsze
+  uruchomienie (zakłada konto admina), ustawienie PIN-u przez link z maila,
+  „Zmień PIN" (z menu ▾ przy imieniu), Panel admina (tylko dla PF: lista
+  kont, dodaj osobę, wyślij link ponownie, zmień e-mail, odblokuj, włącz/
+  wyłącz konto).
+- 🏠 do rozdzielacza w pasku górnym — po zalogowaniu, kieruje zależnie od
+  konta: PF → https://heatcoolfulawkawro-ui.github.io/ (główny, wszystkie
+  appki), pozostali (dziś: ZF) → https://heatcoolfulawkawro-ui.github.io/zuzia/
+  (tylko Wydatki domowe + Gotówka).
 
 ## Otwarte tematy
 
-- Backend jeszcze NIE wdrożony na prawdziwym Arkuszu — `GAS_URL` w
-  `index.html` to placeholder `__DEPLOYMENT_ID__`, `configured()` zwraca
-  false dopóki się nie wpisze prawdziwego URL. Po wdrożeniu: dopisać URL tej
-  appki do `SIBLING_URLS` w Paliwo-PF/Waga-PF/karta-godzin/wydatki-domowe i
-  odwrotnie, zbootstrapować wspólny `SYNC_SECRET`.
-- GitHub Pages jeszcze do włączenia (Settings → Pages → Source: `main`, `/`).
-- Nie testowane na prawdziwym iPhonie Pawła (tylko sandbox + zrzuty ekranu).
+- Po wdrożeniu v2 (kontowej): zakładka `Users` w Arkuszu jest PUSTA na
+  starcie — pierwsze wejście na appkę pokaże „Pierwsze uruchomienie" (zakłada
+  konto PF-admina, link do ustawienia PIN-u przyjdzie na maila właściciela
+  Arkusza — czyli Pawła). Dopiero potem: Panel admina → „Dodaj osobę" →
+  konto ZF dla Zuzi (login ZF, jej imię, jej e-mail) → ona dostaje swój
+  link i sama ustawia PIN. To musi zrobić sam Paweł (wymaga jego logowania
+  na produkcyjnej appce) — ja przygotowałem tylko mechanizm.
+- Stare dane pod kluczem `gotowkaPfState` (pula + wpisy) zostają bez zmian —
+  konta nie dotykają tego klucza, tylko dodają logowanie nad nim.
+- Nie testowane na prawdziwym iPhonie/telefonie Zuzi (tylko sandbox +
+  Playwright: bootstrap → ustawienie PIN-u PF → panel admina → dodanie ZF →
+  jej link → jej PIN → jej logowanie → domyślny „kto" na ZF → zapis wpisu →
+  przeładowanie strony (sesja i dane wracają) → zwykła zmiana PIN-u ZF →
+  utwardzona zmiana PIN-u PF (kod, odrzucenie złego kodu) → panel admina
+  (przycisk „‹ Wróć" po wczytaniu — złapany i naprawiony bug, brakowało
+  podpięcia po drugim renderze).
 - Ewentualne późniejsze pomysły (nie proszone, nie budować bez potwierdzenia):
   wykres/eksport do Excela jak w innych appkach, notatka o „na co" jako
   kategoria zamiast wolnego tekstu.
