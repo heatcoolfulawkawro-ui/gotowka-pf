@@ -540,12 +540,21 @@ function cleanName_(v) {
   return s && s.length <= 40 ? s : null;
 }
 
+// Awaryjny stały adres: Session.getEffectiveUser() bywa pusty, dopóki TO
+// KONKRETNE wdrożenie nie ma jawnie zadeklarowanego zakresu userinfo.email
+// (patrz appsscript.json/oauthScopes) i właściciel go nie autoryzuje ręcznie
+// w edytorze Apps Script — dokładnie to, co się stało przy pierwszym
+// uruchomieniu 28.09.2026 ("noemail"). Ten sam adres był wcześniej na stałe
+// wpisany jako PIN_RESET_EMAIL (v1), więc to nie nowy sekret, tylko powrót
+// do sprawdzonej wartości jako siatki bezpieczeństwa.
+const OWNER_EMAIL_FALLBACK = 'heatcoolfulawkawro@gmail.com';
+
 function ownerEmail_() {
   try {
-    return Session.getEffectiveUser().getEmail() || '';
-  } catch (err) {
-    return '';
-  }
+    const e = Session.getEffectiveUser().getEmail();
+    if (e) return e;
+  } catch (err) {}
+  return OWNER_EMAIL_FALLBACK;
 }
 
 function maskEmail_(e) {
