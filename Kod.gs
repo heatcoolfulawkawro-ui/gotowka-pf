@@ -11,21 +11,15 @@ const PIN_RESET_EMAIL = 'heatcoolfulawkawro@gmail.com';
 const AUTH_FAIL_TEXT = '__BRAK_AUTORYZACJI__';
 
 // ---------- Sync PIN-u z siostrzanymi appkami (ten sam PF/admin) ----------
-// Żeby dołożyć kolejną appkę do tej samej "rodziny" jednego kodu:
-//   1) w NOWEJ appce wklej dokładnie ten sam blok kodu (SIBLING_URLS,
-//      bootstrapSyncSecret, syncPinPush, pushPinToSiblings) i dopisz wywołanie
-//      pushPinToSiblings(newPin) na końcu jej confirmPinReset — patrz niżej.
-//   2) do SIBLING_URLS TEJ appki i wszystkich pozostałych już istniejących
-//      dopisz URL nowej appki (i dopisz URL-e istniejących do listy nowej).
-//   3) zbootstrapuj w nowej appce TEN SAM sekret co reszta rodziny (jednym
-//      POST-em z action:'bootstrap_sync_secret' — działa tylko raz, dopóki
-//      SYNC_SECRET jest puste).
-const SIBLING_URLS = [
-  'https://script.google.com/macros/s/AKfycbwp2qGgpobvHRCOurqA614AxnIA5ozdLlv_EsIr1Ve8t3vNp3Qur8ZfashMQpSZFuM/exec', // Paliwo PF
-  'https://script.google.com/macros/s/AKfycbz3-nc9P2jTv3pX2_aiP6Ne7A67QXtZHObP53BU3GNMIjgrThQSJtfaOCnBbGSGSRQI/exec', // Waga PF
-  'https://script.google.com/macros/s/AKfycby09rSaJwoPPl6KeFn80xCOTiOzYM4EZyKy5XuJ0pBA28-x051wB9HXg_osSqUrjoHA/exec', // Karta godzin (konto PF)
-  'https://script.google.com/macros/s/AKfycby-n1t8ehXtz9sNEByK-dZbObSAs39RKOovANpGIefLbs2-spAlx1iwdFb9CUK5fVZH/exec' // Wydatki domowe (konto PF)
-];
+// CELOWO PUSTE od 28.09.2026: Gotówka PF ma JEDEN wspólny PIN używany przez
+// dwie osoby (PF + ZF, patrz przełącznik "kto" w index.html) — to nie jest
+// "PIN Pawła", więc nie może być zsynchronizowany z jego appkami osobistymi.
+// Wcześniej była tu podpięta do rodziny Paliwo/Waga/karta-godzin/Wydatki —
+// efekt: gdy Zuzia zresetowała PIN TEJ appki mailem, rozesłało go też jako
+// nowy PIN konta PF we wszystkich pozostałych appkach (realny incydent,
+// 28.09.2026). NIE dopisuj tu z powrotem URL-i sióstr bez świadomej decyzji
+// — a jeśli kiedyś jednak trzeba, patrz komentarz w CLAUDE.md.
+const SIBLING_URLS = [];
 
 function bootstrapSyncSecret(secret) {
   const props = PropertiesService.getScriptProperties();
