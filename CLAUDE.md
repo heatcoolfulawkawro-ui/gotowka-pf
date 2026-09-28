@@ -67,16 +67,21 @@ logowania.
   jest dla PF zablokowany, ale TYLKO gdy PIN już istnieje — pierwsze
   ustawienie świeżego konta (bootstrap/zaproszenie) nim może iść, bo nie ma
   jeszcze czego chronić.
-- **Rodzina PIN-u PF — CELOWO ODŁĄCZONA od 28.09.2026** (`SIBLING_URLS = []`
-  w `Kod.gs`). Historia: appka startowo (v1.0) miała JEDEN wspólny PIN dla
-  całej appki (bez osobnych kont) i BYŁA podpięta do tej samej rodziny co
-  Paliwo-PF/Waga-PF/karta-godzin/Wydatki — efekt: gdy Zuzia zresetowała ten
-  wspólny PIN, rozjechało się to na PIN konta PF we WSZYSTKICH appkach Pawła
-  (realny incydent). Teraz appka ma dwa prawdziwe, niezależne konta — PIN
-  konta PF tutaj jest znowu osobnym sekretem, nie tym samym co PIN Pawła
-  gdzie indziej. Mechanizm sync zostaje w kodzie (na wypadek świadomej
-  decyzji, żeby jednak podpiąć PF z powrotem), ale `SIBLING_URLS` ma zostać
-  puste, dopóki ktoś świadomie tego nie zmieni.
+- **Rodzina PIN-u PF — z powrotem podpięta od 28.09.2026** (`SIBLING_URLS` w
+  `Kod.gs` znów zawiera Paliwo-PF/Waga-PF/karta-godzin/Wydatki). Historia
+  tego samego dnia: appka startowo (v1.0) miała JEDEN wspólny PIN dla całej
+  appki (bez osobnych kont) i BYŁA podpięta do tej rodziny — efekt: gdy
+  Zuzia zresetowała ten wspólny PIN, rozjechało się to na PIN konta PF we
+  WSZYSTKICH appkach Pawła (realny incydent), więc appka została chwilowo
+  odłączona. Zaraz potem appka dostała prawdziwe, niezależne konta (PF/ZF) —
+  PIN konta PF jest tu znowu TYLKO PIN-em Pawła (reset PIN-u przez Zuzię
+  dotyczy wyłącznie jej konta ZF i nigdy nie dotknie konta PF), więc
+  ponowne podpięcie jest bezpieczne. Paweł świadomie o to poprosił: jeden
+  PIN ma działać we wszystkich jego appkach. Żeby zmiana PIN-u w Gotówce
+  faktycznie rozeszła się do reszty, musi iść przez utwardzoną ścieżkę
+  (Zmień PIN → kod z maila → link do potwierdzenia) — zwykłe pierwsze
+  ustawienie przez `setPinByLink_` (bootstrap/zaproszenie) NIE rozsyła
+  dalej, celowo.
 
 ## Zasady przy zmianach
 

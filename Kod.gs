@@ -33,17 +33,21 @@ const LOCK_BASE_MS = 5 * 60 * 1000;
 const LOCK_MAX_MS = 24 * 3600 * 1000;
 
 // ---------- Sync PIN-u konta PF z siostrzanymi appkami ----------
-// CELOWO PUSTE od 28.09.2026. Do tego dnia Gotówka miała JEDEN wspólny PIN dla
-// całej appki (PF+ZF razem) i była podpięta do rodziny Paliwo/Waga/karta godzin/
-// Wydatki — efekt: gdy Zuzia zresetowała ten wspólny PIN, rozjechało się to na
-// PIN konta PF we WSZYSTKICH appkach Pawła (realny incydent). Teraz appka ma
-// dwa prawdziwe, niezależne konta (PF, ZF) — PIN konta PF tutaj jest znowu
-// osobnym sekretem, nie tym samym co PIN Pawła gdzie indziej. Mechanizm sync
-// zostaje w kodzie (na wypadek świadomej decyzji, żeby jednak podpiąć PF z
-// powrotem), ale SIBLING_URLS ma zostać puste, dopóki ktoś świadomie tego nie
-// zmieni — NIE dopisuj tu z automatu URL-i innych appek.
+// Do 28.09.2026 appka miała JEDEN wspólny PIN dla całej appki (PF+ZF razem)
+// i była podpięta do rodziny Paliwo/Waga/karta godzin/Wydatki — efekt: gdy
+// Zuzia zresetowała ten wspólny PIN, rozjechało się to na PIN konta PF we
+// WSZYSTKICH appkach Pawła (realny incydent) — appka na chwilę odłączona.
+// Tego samego dnia appka dostała prawdziwe, niezależne konta (PF, ZF), więc
+// PIN konta PF jest tu znowu TYLKO PIN-em Pawła (reset PIN-u przez Zuzię już
+// nigdy nie dotknie tego wiersza) — świadoma decyzja Pawła: dołączona z
+// powrotem, żeby jeden PIN znowu działał we wszystkich jego appkach.
 const PF_ID = 'PF';
-const SIBLING_URLS = [];
+const SIBLING_URLS = [
+  'https://script.google.com/macros/s/AKfycbwp2qGgpobvHRCOurqA614AxnIA5ozdLlv_EsIr1Ve8t3vNp3Qur8ZfashMQpSZFuM/exec', // Paliwo PF
+  'https://script.google.com/macros/s/AKfycbz3-nc9P2jTv3pX2_aiP6Ne7A67QXtZHObP53BU3GNMIjgrThQSJtfaOCnBbGSGSRQI/exec', // Waga PF
+  'https://script.google.com/macros/s/AKfycby09rSaJwoPPl6KeFn80xCOTiOzYM4EZyKy5XuJ0pBA28-x051wB9HXg_osSqUrjoHA/exec', // Karta godzin (konto PF)
+  'https://script.google.com/macros/s/AKfycby-n1t8ehXtz9sNEByK-dZbObSAs39RKOovANpGIefLbs2-spAlx1iwdFb9CUK5fVZH/exec' // Wydatki domowe (konto PF)
+];
 
 function bootstrapSyncSecret_(b) {
   const props = PropertiesService.getScriptProperties();
