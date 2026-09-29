@@ -97,10 +97,14 @@ logowania.
 - POST do Apps Script zawsze z `Content-Type: text/plain;charset=utf-8`.
 - Format danych: jeden klucz `gotowkaPfState`, JSON `{ poolStart: liczba,
   entries: [{id, date (YYYY-MM-DD), type: 'minus'|'plus', amount, note, who,
-  createdAt}] }`. `minus` = pobranie (odejmuje od puli), `plus` = dopłata
-  (dolicza do puli). `who` = kto dokonał wpisu (`'PF'` albo `'ZF'`, przycisk
-  w formularzu; brak pola u starych wpisów traktuj jako nieznane, nie pokazuj
-  plakietki). Zmiana formatu = migracja, nie rób tego mimochodem.
+  createdAt, poolOverride}] }`. `minus` = pobranie (odejmuje od puli), `plus`
+  = dopłata (zamyka bieżący okres, otwiera nowy — patrz „Funkcje" niżej).
+  `who` = kto dokonał wpisu (`'PF'` albo `'ZF'`, przycisk w formularzu; brak
+  pola u starych wpisów traktuj jako nieznane, nie pokazuj plakietki).
+  `poolOverride` = tylko na wpisach `plus`, opcjonalne — ręczna korekta puli
+  nowego okresu przez ✎ (patrz „Funkcje"); brak pola = licz normalnie
+  (reszta poprzedniego okresu + kwota tej dopłaty). Zmiana formatu = migracja,
+  nie rób tego mimochodem.
 - `localStorage` to natychmiastowy bufor, `fetch` do Arkusza idzie w tle —
   appka ma działać offline. Status połączenia: zielona kropka = zsynchronizowano,
   czerwona = błąd (serwer odrzucił — np. sesja wygasła), pomarańczowa =
@@ -116,11 +120,21 @@ logowania.
   `promo`…) — blokery reklam w przeglądarce potrafią ukryć taki element bez
   żadnego błędu w konsoli (bolesne doświadczenie z karty godzin, v1.4.2).
 
-## Funkcje (stan: 28.09.2026, v2 — konta PF/ZF zamiast jednego PIN-u)
+## Funkcje (stan: 29.09.2026, v3 — dopłata zamyka okres)
 
-- Pula gotówki: „pula startowa" (edytowalna ✎, punkt wyjścia) + suma dopłat −
-  suma pobrań = ile zostało. Pasek % wykorzystania względem pełnej puli
-  (startowa + dopłaty do teraz).
+- Pula gotówki działa w OKRESACH (od 29.09.2026, v3): dopłata zamyka bieżący
+  okres (zapisuje do „Zamkniętych okresów": ile było / ile wykorzystano /
+  ile zostało) i otwiera nowy, którego pula startowa = reszta z poprzedniego
+  + kwota dopłaty. Główny ekran (zostało / % wykorzystania / pula startowa /
+  wydano) zawsze pokazuje TYLKO bieżący, otwarty okres — nie sumę wszystkiego
+  od początku appki. Liczone przez `computePeriods()` w locie z listy
+  wpisów (żadne nowe pole w `state` poza opcjonalnym `poolOverride` — patrz
+  format danych niżej) — działa też wstecznie dla dopłat sprzed tej zmiany.
+  „Rytm pobrań" i wykres CELOWO liczą się z całej historii pobrań, bez
+  podziału na okresy (to wzorzec zachowania, nie zależy od puli).
+  ✎ przy „Pula startowa": przed pierwszą dopłatą edytuje `poolStart` wprost;
+  po dopłacie zapisuje ręczną korektę jako `poolOverride` na tej dopłacie
+  (dotyczy tylko bieżącego okresu, nie rusza już zamkniętych).
 - Wpis: Pobranie albo Dopłata, kwota, data (domyślnie dziś), notatka
   opcjonalna (np. „szelki") — bez rozbijania na kategorie/cele, celowo
   prosto. Dotknięcie wpisu w historii otwiera edycję (z opcją Usuń, dwa

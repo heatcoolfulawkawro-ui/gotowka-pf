@@ -214,7 +214,6 @@ function gotowkaPfShowVersion(v){
     <div class="pct">Wykorzystano <b id="stPct">0%</b> z puli <b id="stPula">0 zł</b></div>
     <div class="breakdown">
       <div><div class="k">Pula startowa <button class="editpen" onclick="openPoolEdit()" title="Zmień pulę startową">✎</button></div><div class="v" id="stStart">0 zł</div></div>
-      <div><div class="k">Dopłaty</div><div class="v plus" id="stDoplaty">+0 zł</div></div>
       <div><div class="k">Wydano</div><div class="v minus" id="stWydano">−0 zł</div></div>
     </div>
   </div>
@@ -236,6 +235,9 @@ function gotowkaPfShowVersion(v){
 
   <div class="section-label">Historia</div>
   <div class="card" style="padding:2px 16px" id="entryList"></div>
+
+  <div class="section-label" id="periodsLabel" hidden>Zamknięte okresy</div>
+  <div class="card" style="padding:2px 16px" id="periodsList" hidden></div>
 </div>
 
 <button class="fab" id="btnAdd">＋ Nowy wpis</button>
@@ -698,13 +700,36 @@ const MONTHS_SHORT = ['sty','lut','mar','kwi','maj','cze','lip','sie','wrz','pa�
 function zl(v){ return Math.round(v).toLocaleString('pl-PL') + ' zł'; }
 
 /* ====================== LICZENIE ====================== */
+// Dopłata zamyka bieżący okres (ile było / ile wykorzystano trafia do
+// "Zamkniętych okresów") i otwiera nowy, którego pula startowa = to, co
+// zostało z poprzedniego + kwota dopłaty. `poolOverride` na wpisie dopłaty
+// (ustawiane przez ✎ na "Pula startowa", gdy okres już trwa) pozwala ręcznie
+// skorygować tę wyliczoną wartość, tak jak state.poolStart robi to dla
+// pierwszego okresu (przed jakąkolwiek dopłatą).
+function computePeriods(entries){
+  const sorted = (entries || state.entries).slice().sort((a,b)=> a.date===b.date ? (a.createdAt-b.createdAt) : (a.date<b.date?-1:1));
+  const closed = [];
+  let start = state.poolStart, used = 0;
+  sorted.forEach(e=>{
+    if(e.type==='minus'){ used += e.amount; return; }
+    const leftover = start - used;
+    closed.push({ start, used, leftover, doplata: e.amount, closedDate: e.date });
+    start = e.poolOverride!=null ? e.poolOverride : leftover + e.amount;
+    used = 0;
+  });
+  return { closed, current: { start, used, leftover: start - used } };
+}
+
+function lastDoplataEntry(){
+  const doplaty = state.entries.filter(e=>e.type==='plus')
+    .sort((a,b)=> a.date===b.date ? (a.createdAt-b.createdAt) : (a.date<b.date?-1:1));
+  return doplaty.length ? doplaty[doplaty.length-1] : null;
+}
+
 function computeStats(){
-  let wydano=0, doplaty=0;
-  state.entries.forEach(e=>{ if(e.type==='minus') wydano+=e.amount; else doplaty+=e.amount; });
-  const pula = state.poolStart + doplaty;
-  const zostalo = pula - wydano;
-  const pct = pula>0 ? Math.round(wydano/pula*100) : 0;
-  return {wydano, doplaty, pula, zostalo, pct};
+  const { current } = computePeriods();
+  const pct = current.start>0 ? Math.round(current.used/current.start*100) : 0;
+  return { wydano: current.used, pula: current.start, zostalo: current.leftover, pct };
 }
 
 function minusEntries(exceptId){
@@ -749,8 +774,7 @@ function render(){
   document.getElementById('stFill').style.width = Math.min(100, Math.max(0,s.pct)) + '%';
   document.getElementById('stPct').textContent = s.pct + '%';
   document.getElementById('stPula').textContent = zl(s.pula);
-  document.getElementById('stStart').textContent = zl(state.poolStart);
-  document.getElementById('stDoplaty').textContent = '+' + zl(s.doplaty);
+  document.getElementById('stStart').textContent = zl(s.pula);
   document.getElementById('stWydano').textContent = '−' + zl(s.wydano);
 
   const avg = avgDaysBetween();
@@ -758,6 +782,23 @@ function render(){
 
   renderChart();
   renderList();
+  renderPeriods();
+}
+
+function renderPeriods(){
+  const { closed } = computePeriods();
+  const label = document.getElementById('periodsLabel');
+  const list = document.getElementById('periodsList');
+  if(!closed.length){ label.hidden = true; list.hidden = true; return; }
+  label.hidden = false; list.hidden = false;
+  list.innerHTML = closed.slice().reverse().map(p => `
+    <div class="entry" style="cursor:default">
+      <div class="mid">
+        <div class="date">Do ${dm(p.closedDate)}</div>
+        <div class="note-txt">Było ${zl(p.start)} · wykorzystano ${zl(p.used)} · zostało ${zl(p.leftover)}</div>
+      </div>
+      <div class="amt plus">+${zl(p.doplata)}</div>
+    </div>`).join('');
 }
 
 function renderChart(){
@@ -866,16 +907,15 @@ document.getElementById('whoSeg').addEventListener('click', e=>{
 function updatePreview(){
   const kwota = parseFloat((document.getElementById('fKwota').value||'').replace(',','.')) || 0;
   const type = currentType();
-  let wydano=0, doplaty=0;
-  state.entries.forEach(e=>{
-    if(e.id===editingId) return;
-    if(e.type==='minus') wydano+=e.amount; else doplaty+=e.amount;
-  });
-  if(type==='minus') wydano+=kwota; else doplaty+=kwota;
-  const pula = state.poolStart + doplaty;
-  const zostalo = pula - wydano;
-  const pct = pula>0 ? Math.round(wydano/pula*100) : 0;
-  document.getElementById('fPreview').innerHTML = `Po zapisaniu zostanie: <b>${zl(zostalo)}</b> · wykorzystano <b>${pct}%</b>`;
+  const date = document.getElementById('fData').value || todayISO();
+  // Symulacja: podmień edytowany wpis (jeśli edycja) albo dopisz nowy, i policz
+  // okresy tak samo jak dla prawdziwych danych — dzięki temu podgląd poprawnie
+  // pokazuje, że Dopłata zamyka bieżący okres i otwiera nowy od reszty+dopłaty.
+  const temp = state.entries.filter(e=>e.id!==editingId);
+  temp.push({ date, type, amount: kwota, createdAt: Date.now() });
+  const { current } = computePeriods(temp);
+  const pct = current.start>0 ? Math.round(current.used/current.start*100) : 0;
+  document.getElementById('fPreview').innerHTML = `Po zapisaniu zostanie: <b>${zl(current.leftover)}</b> · wykorzystano <b>${pct}%</b>`;
 }
 
 document.getElementById('btnAdd').addEventListener('click', openAdd);
@@ -927,14 +967,18 @@ document.getElementById('chartSeg').addEventListener('click', e=>{
 
 /* ====================== PULA STARTOWA ====================== */
 function openPoolEdit(){
-  document.getElementById('poolNewVal').value = state.poolStart;
+  document.getElementById('poolNewVal').value = computePeriods().current.start;
   document.getElementById('poolEditOverlay').classList.add('open');
 }
 function closePoolEdit(){ document.getElementById('poolEditOverlay').classList.remove('open'); }
 function savePoolEdit(){
   const v = parseFloat((document.getElementById('poolNewVal').value||'').replace(',','.'));
   if(!(v>=0)){ showToast('Podaj poprawną kwotę', true); return; }
-  state.poolStart = v;
+  // Przed pierwszą dopłatą "pula startowa" to state.poolStart wprost; po
+  // dopłacie bieżący okres ma pulę WYLICZONĄ (reszta + dopłata) — ręczna
+  // korekta zapisuje się jako poolOverride na tej dopłacie, patrz computePeriods().
+  const last = lastDoplataEntry();
+  if(last){ last.poolOverride = v; } else { state.poolStart = v; }
   closePoolEdit();
   render();
   saveState();
