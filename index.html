@@ -4,12 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <script>
-// Skróty na ekranie głównym telefonu potrafią pokazywać zbuforowaną,
-// starą wersję strony. Porównujemy wersję TEJ strony (document.lastModified)
-// z wersją na serwerze (HEAD z pominięciem cache) i przy nowszej przeładowujemy.
-// Do 30.09.2026 porównanie szło z "ostatnio widzianą" wersją w localStorage —
-// wspólną dla wszystkich adresów, więc stara kopia spod /gotowka-pf/ nie
-// przeładowywała się, jeśli nowa weszła wcześniej spod ?pin= albo ?v=.
 function gotowkaPfFormatVersion(ms){
   var d = new Date(ms);
   if(isNaN(d.getTime())) return '—';
@@ -20,25 +14,29 @@ function gotowkaPfShowVersion(ms){
   var el = document.getElementById('pageVersion');
   if(el) el.textContent = 'wersja strony: ' + gotowkaPfFormatVersion(ms);
 }
+// Skróty na ekranie głównym telefonu potrafią pokazywać zbuforowaną, starą
+// wersję strony. Porównujemy wersję TEJ strony (document.lastModified) z wersją
+// na serwerze (HEAD bez cache) i przy nowszej przeładowujemy raz. Klucz
+// 'gotowkapf_page_version' trzyma stałą wartość, bo stare kopie strony (sprzed 30.09.2026)
+// porównują go z serwerem — dzięki temu same przeskakują na świeżą wersję.
 (function(){
   var pageMs = Date.parse(document.lastModified);
   window.__gotowkaPfVersion = pageMs;
   document.addEventListener('DOMContentLoaded', function(){ gotowkaPfShowVersion(pageMs); });
-  // Stare kopie strony (sprzed 30.09.2026) przeładowują się, gdy ten klucz
-  // różni się od wersji na serwerze — trzymamy w nim wartość, która nigdy
-  // się nie zgodzi, więc każda taka kopia sama przeskoczy na świeżą.
   try{ localStorage.setItem('gotowkapf_page_version', 'nowy-mechanizm'); }catch(e){}
   try{
     fetch(location.pathname, { method:'HEAD', cache:'no-store' }).then(function(res){
       var serverMs = Date.parse(res.headers.get('last-modified') || '');
       if(isNaN(serverMs) || isNaN(pageMs) || serverMs - pageMs < 5000) return;
-      var guard = 'gotowkapf_reload_' + serverMs;
+      var guard = 'gotowkapf_page_version_reload_' + serverMs;
       if(sessionStorage.getItem(guard)) return;
       sessionStorage.setItem(guard, '1');
-      location.replace(location.pathname + '?v=' + Date.now());
+      // Unikalny ?v= wymusza pobranie z sieci (GitHub Pages trzyma cache 10 min);
+      // pozostałe parametry, np. ?pin= z linku w mailu, zostają.
+      var q = new URLSearchParams(location.search); q.set('v', Date.now());
+      location.replace(location.pathname + '?' + q.toString());
     }).catch(function(){});
-    // Nadpisz zbuforowaną kopię pod gołym adresem (bez ?v=), bo to ją
-    // otwierają linki z rozdzielaczy.
+    // Odśwież zbuforowaną kopię spod gołego adresu — to ją otwierają skróty i rozdzielacze.
     fetch(location.pathname, { cache:'reload' }).catch(function(){});
   }catch(e){}
 })();
