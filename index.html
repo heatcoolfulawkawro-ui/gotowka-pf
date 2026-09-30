@@ -5,32 +5,41 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <script>
 // Skróty na ekranie głównym telefonu potrafią pokazywać zbuforowaną,
-// starą wersję strony. Ten kod po cichu sprawdza w tle prawdziwą
-// aktualną wersję na serwerze (z pominięciem cache przeglądarki) i
-// odświeża stronę automatycznie, jeśli wykryje nowszą.
-function gotowkaPfFormatVersion(raw){
-  var d = new Date(raw);
-  if(isNaN(d.getTime())) return raw;
+// starą wersję strony. Porównujemy wersję TEJ strony (document.lastModified)
+// z wersją na serwerze (HEAD z pominięciem cache) i przy nowszej przeładowujemy.
+// Do 30.09.2026 porównanie szło z "ostatnio widzianą" wersją w localStorage —
+// wspólną dla wszystkich adresów, więc stara kopia spod /gotowka-pf/ nie
+// przeładowywała się, jeśli nowa weszła wcześniej spod ?pin= albo ?v=.
+function gotowkaPfFormatVersion(ms){
+  var d = new Date(ms);
+  if(isNaN(d.getTime())) return '—';
   function pad(n){ return String(n).padStart(2,'0'); }
   return pad(d.getDate())+'.'+pad(d.getMonth()+1)+' '+pad(d.getHours())+':'+pad(d.getMinutes());
 }
-function gotowkaPfShowVersion(v){
-  window.__gotowkaPfVersion = v;
+function gotowkaPfShowVersion(ms){
   var el = document.getElementById('pageVersion');
-  if(el) el.textContent = 'wersja strony: ' + gotowkaPfFormatVersion(v);
+  if(el) el.textContent = 'wersja strony: ' + gotowkaPfFormatVersion(ms);
 }
 (function(){
-  var cached = localStorage.getItem('gotowkapf_page_version');
-  if(cached) gotowkaPfShowVersion(cached);
+  var pageMs = Date.parse(document.lastModified);
+  window.__gotowkaPfVersion = pageMs;
+  document.addEventListener('DOMContentLoaded', function(){ gotowkaPfShowVersion(pageMs); });
+  // Stare kopie strony (sprzed 30.09.2026) przeładowują się, gdy ten klucz
+  // różni się od wersji na serwerze — trzymamy w nim wartość, która nigdy
+  // się nie zgodzi, więc każda taka kopia sama przeskoczy na świeżą.
+  try{ localStorage.setItem('gotowkapf_page_version', 'nowy-mechanizm'); }catch(e){}
   try{
     fetch(location.pathname, { method:'HEAD', cache:'no-store' }).then(function(res){
-      var v = res.headers.get('last-modified') || res.headers.get('etag');
-      if(!v) return;
-      var stored = localStorage.getItem('gotowkapf_page_version');
-      localStorage.setItem('gotowkapf_page_version', v);
-      gotowkaPfShowVersion(v);
-      if(stored && stored !== v) location.replace(location.pathname + '?v=' + Date.now());
+      var serverMs = Date.parse(res.headers.get('last-modified') || '');
+      if(isNaN(serverMs) || isNaN(pageMs) || serverMs - pageMs < 5000) return;
+      var guard = 'gotowkapf_reload_' + serverMs;
+      if(sessionStorage.getItem(guard)) return;
+      sessionStorage.setItem(guard, '1');
+      location.replace(location.pathname + '?v=' + Date.now());
     }).catch(function(){});
+    // Nadpisz zbuforowaną kopię pod gołym adresem (bez ?v=), bo to ją
+    // otwierają linki z rozdzielaczy.
+    fetch(location.pathname, { cache:'reload' }).catch(function(){});
   }catch(e){}
 })();
 </script>
@@ -189,6 +198,7 @@ function gotowkaPfShowVersion(v){
     <span class="name">💵 Gotówka PF</span>
     <span class="sub">RA-STER · pula gotówki</span>
     <span class="sync local" id="syncIndicator"><span class="dot"></span><span id="syncText">lokalnie</span></span>
+    <button class="pin-btn" id="btnRefresh" title="Odśwież (najnowsza wersja i dane)" hidden onclick="location.replace(location.pathname + '?v=' + Date.now())">↻</button>
     <button class="pin-btn" id="btnHub" title="Rozdzielacz" hidden>🏠</button>
     <button class="pin-btn userbtn" id="userBtn" hidden></button>
   </div>
@@ -323,6 +333,7 @@ function renderUserBtn() {
   b.hidden = !auth;
   if (auth) b.textContent = auth.user.name + ' ▾';
   document.getElementById('menuAdmin').hidden = !(auth && auth.user.role === 'admin');
+  document.getElementById('btnRefresh').hidden = !auth;
   const hub = document.getElementById('btnHub');
   hub.hidden = !auth;
   hub.onclick = () => { location.href = auth && auth.user.id === 'PF' ? 'https://heatcoolfulawkawro-ui.github.io/' : 'https://heatcoolfulawkawro-ui.github.io/zuzia/'; };
@@ -612,8 +623,18 @@ function loadState(){
   return seedState();
 }
 
+// "Brudny" = na tym telefonie są zmiany, których serwer jeszcze nie ma.
+// Tylko wtedy wolno wysłać cały stan na serwer — inaczej telefon ze starą
+// kopią nadpisałby wpisy zrobione w międzyczasie na drugim telefonie.
+const LS_DIRTY = 'gotowkaPfDirty';
+let saveSeq = 0;
+function isDirty(){ try{ return localStorage.getItem(LS_DIRTY) === '1'; }catch(e){ return false; } }
+function setDirty(v){ try{ v ? localStorage.setItem(LS_DIRTY, '1') : localStorage.removeItem(LS_DIRTY); }catch(e){} }
+
 function saveState(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+  saveSeq++;
+  setDirty(true);
   setSyncStatus('local');
   syncRemote();
 }
@@ -627,17 +648,24 @@ function setSyncStatus(kind){
 
 async function syncRemote(){
   if(!configured() || !auth) return;
+  const seq = saveSeq;
   try{
     const out = await api('set', { key: STORAGE_KEY, value: JSON.stringify(state) });
-    setSyncStatus(out && out.ok ? 'ok' : 'err');
+    if(out && out.ok){ if(seq === saveSeq) setDirty(false); setSyncStatus('ok'); }
+    else setSyncStatus('err');
   }catch(e){ setSyncStatus('err'); }
 }
 
-// Telefon wraca do zasięgu — appka sama dogania zaległy zapis.
-window.addEventListener('online', syncRemote);
+// Telefon wraca do zasięgu — wysyłamy tylko zaległe zmiany z tego telefonu.
+window.addEventListener('online', ()=>{ if(isDirty()) syncRemote(); });
+// Powrót do appki (np. z rozdzielacza albo innej karty) — dociągnij świeże dane.
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden && auth && !document.getElementById('appShell').hidden) loadRemoteOnStart();
+});
 
 async function loadRemoteOnStart(){
   if(!configured() || !auth) return;
+  if(isDirty()) return syncRemote(); // najpierw oddaj serwerowi zmiany zrobione offline
   try{
     const out = await api('get', { key: STORAGE_KEY });
     if(!out || !out.ok){ setSyncStatus('local'); return; }
@@ -649,11 +677,13 @@ async function loadRemoteOnStart(){
 }
 
 function applyRemoteState(text){
-  if(!text) return;
+  if(!text || isDirty()) return; // lokalna zmiana w trakcie pobierania — ona wygrywa, pójdzie na serwer
   try{
     const remote = JSON.parse(text);
     if(remote && typeof remote.poolStart === 'number' && Array.isArray(remote.entries)){
       state = remote;
+      // Bez tego telefon po ponownym wejściu pokazywał najpierw starą kopię.
+      try{ localStorage.setItem(STORAGE_KEY, text); }catch(e){}
       render();
     }
   }catch(e){ /* nieprawidłowa odpowiedź — zostajemy przy danych lokalnych */ }

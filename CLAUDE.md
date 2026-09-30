@@ -26,11 +26,17 @@ logowania.
 
 ## Wdrażanie — wszystko przez `git push` na `main`
 
-- **Frontend**: push → GitHub Pages publikuje samo (~1 min). Appka sama
-  wykrywa nową wersję przez `HEAD` + `last-modified` (skrypt na górze
-  `index.html`) i przeładowuje się — bez ręcznego `.vertag`/`.buildtag`
-  (inaczej niż karta godzin); widoczny znacznik to „wersja strony: DD.MM
-  GG:MM" pod nagłówkiem, klikalny (wymusza pobranie najnowszej).
+- **Frontend**: push → GitHub Pages publikuje samo (~1 min, cache 10 min).
+  Appka sama wykrywa nową wersję: porównuje `document.lastModified` TEJ
+  strony z `last-modified` z `HEAD` (skrypt na górze `index.html`) i
+  przeładowuje się raz na `?v=…` (strażnik w sessionStorage), a przy okazji
+  odświeża kopię spod gołego adresu (`fetch(…, {cache:'reload'})`) — to ją
+  otwierają rozdzielacze. Do 30.09.2026 porównanie szło z wersją zapamiętaną
+  w localStorage (wspólną dla wszystkich adresów) i stara kopia spod
+  `/gotowka-pf/` zostawała na telefonie Zuzi; klucz `gotowkapf_page_version`
+  trzyma teraz stałą wartość, żeby takie stare kopie same przeskakiwały.
+  Widoczny znacznik „wersja strony: DD.MM GG:MM" = wersja TEJ strony
+  (klikalny), plus przycisk ↻ w nagłówku po zalogowaniu.
 - **Backend**: push zmieniający `Kod.gs` lub `appsscript.json` uruchamia
   `.github/workflows/deploy-gas.yml`: `clasp push -f` + `clasp deploy
   --deploymentId <istniejące>` (sekret `CLASPRC_JSON`). Nigdy nie wdrażaj bez
@@ -108,8 +114,15 @@ logowania.
 - `localStorage` to natychmiastowy bufor, `fetch` do Arkusza idzie w tle —
   appka ma działać offline. Status połączenia: zielona kropka = zsynchronizowano,
   czerwona = błąd (serwer odrzucił — np. sesja wygasła), pomarańczowa =
-  zapisano lokalnie (offline). Po powrocie ONLINE appka sama wysyła zaległy
-  stan (`window.addEventListener('online', syncRemote)`).
+  zapisano lokalnie (offline). Serwer trzyma CAŁY stan jednym kluczem
+  (ostatni zapis wygrywa), więc telefon wysyła stan TYLKO gdy ma własne,
+  jeszcze niewysłane zmiany (flaga `gotowkaPfDirty` w localStorage): przy
+  starcie brudny → wysyła, czysty → pobiera z serwera i nadpisuje lokalną
+  kopię; zdarzenie `online` wysyła tylko brudny stan; powrót do karty
+  (`visibilitychange`) dociąga świeże dane. Do 30.09.2026 `online` wysyłał
+  zawsze, a pobrane dane nie trafiały do localStorage — telefon ze starą
+  kopią mógł nadpisać serwer. Znane ograniczenie: dwa telefony z
+  niewysłanymi zmianami naraz → wygrywa ten, który wyśle później.
 - Przy wpisywaniu w polach nie przebudowuj DOM-u bez potrzeby (telefon gubi
   fokus).
 - Paleta i styl: ciemny motyw (te same tokeny co Paliwo/Waga/karta godzin/
